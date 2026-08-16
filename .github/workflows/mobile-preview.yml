@@ -86,3 +86,4 @@ jobs:
               --prerelease \
               --title "Invite 1.0.0 preview 1" \
               --notes "Installable Android preview for direct device testing. Development-signed; not intended for Play Store submission. Verify the APK against the attached SHA-256 checksum before installation."
+          fi
