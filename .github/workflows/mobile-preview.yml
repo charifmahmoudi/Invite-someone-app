@@ -17,7 +17,7 @@ jobs:
   android-apk:
     name: Android installable APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -46,24 +46,29 @@ jobs:
         env:
           CI: '1'
 
-      - name: Build installable preview APK
+      - name: Build standalone preview APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Verify embedded JavaScript bundle
+        run: |
+          unzip -Z1 android/app/build/outputs/apk/release/app-release.apk \
+            | grep -Fxq 'assets/index.android.bundle'
 
       - name: Prepare release files
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk Invite-1.0.0-preview.1.apk
-          sha256sum Invite-1.0.0-preview.1.apk > Invite-1.0.0-preview.1.apk.sha256
+          cp android/app/build/outputs/apk/release/app-release.apk Invite-1.0.0-preview.2.apk
+          sha256sum Invite-1.0.0-preview.2.apk > Invite-1.0.0-preview.2.apk.sha256
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: invite-android-preview
+          name: invite-android-preview-2
           path: |
-            Invite-1.0.0-preview.1.apk
-            Invite-1.0.0-preview.1.apk.sha256
+            Invite-1.0.0-preview.2.apk
+            Invite-1.0.0-preview.2.apk.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -71,19 +76,19 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v1.0.0-preview.1
+          RELEASE_TAG: v1.0.0-preview.2
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" \
-              Invite-1.0.0-preview.1.apk \
-              Invite-1.0.0-preview.1.apk.sha256 \
+              Invite-1.0.0-preview.2.apk \
+              Invite-1.0.0-preview.2.apk.sha256 \
               --clobber
           else
             gh release create "$RELEASE_TAG" \
-              Invite-1.0.0-preview.1.apk \
-              Invite-1.0.0-preview.1.apk.sha256 \
+              Invite-1.0.0-preview.2.apk \
+              Invite-1.0.0-preview.2.apk.sha256 \
               --target "$GITHUB_SHA" \
               --prerelease \
-              --title "Invite 1.0.0 preview 1" \
-              --notes "Installable Android preview for direct device testing. Development-signed; not intended for Play Store submission. Verify the APK against the attached SHA-256 checksum before installation."
+              --title "Invite 1.0.0 preview 2" \
+              --notes "Standalone Android preview with its JavaScript bundle embedded; no Metro development server is required. Development-signed and intended for direct device testing, not Play Store submission. Verify the APK against the attached SHA-256 checksum before installation."
           fi
