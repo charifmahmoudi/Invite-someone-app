@@ -41,7 +41,7 @@ npm run export:web -- --output-dir dist
 
 ### Installed Android startup
 
-`mobile-preview.yml` builds the release Gradle target, asserts that `assets/index.android.bundle` is present and non-trivial, installs the APK on an emulator, and checks the Android accessibility tree for the welcome heading. This protects against accidentally publishing a debug APK that waits for Metro while displaying the splash screen.
+`mobile-preview.yml` builds the release Gradle target, asserts that `assets/index.android.bundle` is present and non-trivial, and invokes `scripts/verify-android-startup.sh` to install the APK and check the Android accessibility tree for the welcome heading. The portable shell script is syntax-checked in CI, and failures retain the UI hierarchy and error log as diagnostic artifacts. This protects against accidentally publishing a debug APK that waits for Metro while displaying the splash screen.
 
 ## Required production-backend tests
 

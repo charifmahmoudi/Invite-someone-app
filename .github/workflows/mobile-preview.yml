@@ -23,6 +23,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Validate startup smoke script
+        run: sh -n scripts/verify-android-startup.sh
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -63,33 +66,6 @@ jobs:
           cp "$apk" Invite-1.0.1-preview.2.apk
           sha256sum Invite-1.0.1-preview.2.apk > Invite-1.0.1-preview.2.apk.sha256
 
-      - name: Verify installed app exits the splash screen
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          script: |
-            set -eu
-            adb install -r Invite-1.0.1-preview.2.apk
-            adb shell am force-stop com.charifmahmoudi.invite
-            adb shell monkey -p com.charifmahmoudi.invite -c android.intent.category.LAUNCHER 1
-
-            for attempt in $(seq 1 30); do
-              adb shell uiautomator dump /sdcard/invite-window.xml >/dev/null 2>&1 || true
-              adb pull /sdcard/invite-window.xml startup-window.xml >/dev/null 2>&1 || true
-              if grep -q "Making friends can start with one simple invite" startup-window.xml 2>/dev/null; then
-                echo "Invite reached the welcome screen."
-                exit 0
-              fi
-              sleep 2
-            done
-
-            echo "Invite did not leave the splash screen within 60 seconds."
-            adb logcat -d '*:E' | tail -200
-            exit 1
-
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -99,6 +75,26 @@ jobs:
             Invite-1.0.1-preview.2.apk.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Verify installed app exits the splash screen
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: sh scripts/verify-android-startup.sh Invite-1.0.1-preview.2.apk com.charifmahmoudi.invite "Making friends can start with one simple invite"
+
+      - name: Upload startup diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-android-startup-diagnostics
+          path: |
+            startup-window.xml
+            startup-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Publish Android prerelease
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
