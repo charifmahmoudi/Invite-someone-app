@@ -71,7 +71,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r Invite-1.0.1-preview.2.apk
             adb shell am force-stop com.charifmahmoudi.invite
             adb shell monkey -p com.charifmahmoudi.invite -c android.intent.category.LAUNCHER 1
