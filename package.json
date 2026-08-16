@@ -2,7 +2,7 @@
   "name": "invite-someone-app",
   "description": "A cross-platform app for turning thoughtful activity invitations into local community.",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -64,11 +64,19 @@
   "jest": {
     "preset": "jest-expo",
     "testMatch": [
-      "**/__tests__/**/*.test.ts"
+      "**/__tests__/**/*.test.ts",
+      "**/__tests__/**/*.test.tsx"
+    ],
+    "setupFiles": [
+      "<rootDir>/jest.setup.ts"
     ],
     "collectCoverageFrom": [
       "src/domain/**/*.ts",
-      "!src/domain/**/*.d.ts"
+      "!src/domain/**/*.d.ts",
+      "src/state/app-context.tsx",
+      "src/app/(auth)/welcome.tsx",
+      "src/app/(tabs)/{index,people,invitations}.tsx",
+      "src/app/create.tsx"
     ],
     "coverageDirectory": "coverage"
   },
