@@ -15,13 +15,16 @@ concurrency:
 
 jobs:
   android-apk:
-    name: Android installable APK
+    name: Android standalone APK and startup smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Validate startup smoke script
+        run: sh -n scripts/verify-android-startup.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -50,39 +53,65 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Prepare release files
+      - name: Verify embedded JavaScript and prepare release files
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk Invite-1.0.0-preview.1.apk
-          sha256sum Invite-1.0.0-preview.1.apk > Invite-1.0.0-preview.1.apk.sha256
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk"
+          unzip -Z1 "$apk" | grep -Fxq "assets/index.android.bundle"
+          bundle_size=$(unzip -p "$apk" assets/index.android.bundle | wc -c)
+          test "$bundle_size" -gt 100000
+          cp "$apk" Invite-1.0.1-preview.2.apk
+          sha256sum Invite-1.0.1-preview.2.apk > Invite-1.0.1-preview.2.apk.sha256
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: invite-android-preview
           path: |
-            Invite-1.0.0-preview.1.apk
-            Invite-1.0.0-preview.1.apk.sha256
+            Invite-1.0.1-preview.2.apk
+            Invite-1.0.1-preview.2.apk.sha256
           if-no-files-found: error
           retention-days: 30
+
+      - name: Verify installed app exits the splash screen
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: sh scripts/verify-android-startup.sh Invite-1.0.1-preview.2.apk com.charifmahmoudi.invite "Making friends can start with one simple invite"
+
+      - name: Upload startup diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-android-startup-diagnostics
+          path: |
+            startup-window.xml
+            startup-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Publish Android prerelease
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v1.0.0-preview.1
+          RELEASE_TAG: v1.0.1-preview.2
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" \
-              Invite-1.0.0-preview.1.apk \
-              Invite-1.0.0-preview.1.apk.sha256 \
+              Invite-1.0.1-preview.2.apk \
+              Invite-1.0.1-preview.2.apk.sha256 \
               --clobber
           else
             gh release create "$RELEASE_TAG" \
-              Invite-1.0.0-preview.1.apk \
-              Invite-1.0.0-preview.1.apk.sha256 \
+              Invite-1.0.1-preview.2.apk \
+              Invite-1.0.1-preview.2.apk.sha256 \
               --target "$GITHUB_SHA" \
               --prerelease \
-              --title "Invite 1.0.0 preview 1" \
-              --notes "Installable Android preview for direct device testing. Development-signed; not intended for Play Store submission. Verify the APK against the attached SHA-256 checksum before installation."
+              --title "Invite 1.0.1 preview 2" \
+              --notes "Standalone Android preview with an embedded JavaScript bundle. CI installs it on an emulator and verifies that it reaches the welcome screen without Metro. Development-signed; not intended for Play Store submission."

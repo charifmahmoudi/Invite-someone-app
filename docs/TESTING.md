@@ -2,15 +2,15 @@
 
 ## Quality gates
 
-Every pull request runs four independent gates:
+Every pull request runs five independent gates:
 
 1. Strict TypeScript compilation
 2. ESLint, including React Hooks purity/compiler rules
 3. Jest story tests with coverage
 4. A production static web export to catch bundling and route failures
-5. An Android native preview build on every pull request and `main` update
+5. A standalone Android build, embedded-bundle assertion, install, and startup smoke test
 
-The native workflow uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.1` prerelease for direct Android device testing. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
+The native workflow builds with `assembleRelease` so the JavaScript runtime is embedded rather than fetched from Metro. It verifies the bundle inside the APK, installs the APK on an API 35 emulator, launches it without a development server, and fails unless the welcome screen replaces the splash logo within 60 seconds. Updates to `main` publish the verified APK and checksum to the `v1.0.1-preview.2` prerelease. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
 
 Run the same checks locally:
 
@@ -34,6 +34,14 @@ npm run export:web -- --output-dir dist
 ### User-story transitions
 
 `app-reducer.test.ts` exercises creation, invitations, acceptance, decline, public joining, duplicate prevention, and saving. Pure reducer tests are fast and deterministic; remote security is independently enforced by SQL.
+
+### Rendered application flows
+
+`app-flow.test.tsx` mounts the real product screens and `AppProvider` with a deterministic router adapter. It verifies clean startup, demo entry, activity discovery, people search, invitation acceptance, and activity creation through the controls a member actually uses. AsyncStorage and device-only icon/haptic modules are replaced with deterministic test adapters.
+
+### Installed Android startup
+
+`mobile-preview.yml` builds the release Gradle target, asserts that `assets/index.android.bundle` is present and non-trivial, and invokes `scripts/verify-android-startup.sh` to install the APK and check the Android accessibility tree for the welcome heading. The portable shell script is syntax-checked in CI, and failures retain the UI hierarchy and error log as diagnostic artifacts. This protects against accidentally publishing a debug APK that waits for Metro while displaying the splash screen.
 
 ## Required production-backend tests
 
@@ -69,8 +77,7 @@ Story IDs in [USER_STORIES.md](./USER_STORIES.md) map directly to test names. Wh
 
 ## Future automation
 
-- React Native Testing Library tests for critical form/error rendering
-- Maestro smoke flows on Android and iOS development builds
+- Deeper Maestro flows on signed Android and iOS release candidates
 - Supabase local integration suite in CI
 - Accessibility tree assertions and screenshot contrast checks
 - Bundle-size and cold-start budgets

@@ -51,7 +51,7 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 ## Installable builds
 
-Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates an installable Android APK, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.1` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
+Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It builds a standalone release-mode Android APK with an embedded JavaScript bundle, records its SHA-256 checksum, installs it on an Android emulator, and verifies that the welcome screen replaces the splash logo without a Metro server. Successful builds are published to the `v1.0.1-preview.2` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 
