@@ -10,7 +10,7 @@ Every pull request runs four independent gates:
 4. A production static web export to catch bundling and route failures
 5. An Android native preview build on every pull request and `main` update
 
-The native workflow uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.1` prerelease for direct Android device testing. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
+The native workflow builds the Android release variant and fails unless `assets/index.android.bundle` is embedded in the APK. It then uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.2` prerelease for direct Android device testing. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
 
 Run the same checks locally:
 

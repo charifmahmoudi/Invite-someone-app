@@ -10,10 +10,12 @@
     "ios": {
       "icon": "./assets/brand/icon.png",
       "bundleIdentifier": "com.charifmahmoudi.invite",
+      "buildNumber": "2",
       "supportsTablet": false
     },
     "android": {
       "package": "com.charifmahmoudi.invite",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#EE6548",
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
