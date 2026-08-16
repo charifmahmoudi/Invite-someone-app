@@ -49,6 +49,26 @@ npx expo run:ios
 
 The iOS command requires macOS. EAS profiles for cloud development, preview, and production builds are included in [eas.json](./eas.json).
 
+## Installable builds
+
+Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates an installable Android APK, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.1` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
+
+The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
+
+```bash
+npx eas-cli init
+npx eas-cli build --platform android --profile preview
+```
+
+An installable iPhone IPA must be signed with an Apple Developer certificate and provisioning profile. The repository owner can link the project and let EAS manage those private credentials without committing them:
+
+```bash
+npx eas-cli init
+npx eas-cli build --platform ios --profile preview
+```
+
+The iOS command prompts the authorized Apple Developer account when credentials have not been configured. An unsigned iOS archive is deliberately not published because it cannot be installed on a physical iPhone.
+
 ## Try the complete demo
 
 No backend is required for product review. On the welcome screen, choose **Explore the demo**. Demo changes are persisted on the device with AsyncStorage.
