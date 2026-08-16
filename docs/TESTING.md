@@ -8,6 +8,9 @@ Every pull request runs four independent gates:
 2. ESLint, including React Hooks purity/compiler rules
 3. Jest story tests with coverage
 4. A production static web export to catch bundling and route failures
+5. An Android native preview build on every pull request and `main` update
+
+The native workflow uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.1` prerelease for direct Android device testing. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
 
 Run the same checks locally:
 
