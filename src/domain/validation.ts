@@ -31,6 +31,10 @@ export const signUpSchema = signUpBasicsSchema.extend({
 
 export const profileUpdateSchema = z.object({
   name: requiredText('Name'),
+  avatarUrl: z
+    .url('Enter a complete https:// photo URL.')
+    .refine((value) => value.startsWith('https://'), 'Profile photos must use HTTPS.')
+    .optional(),
   headline: requiredText('Headline', 4).max(80, 'Keep your headline under 80 characters.'),
   bio: requiredText('Bio', 20).max(320, 'Keep your bio under 320 characters.'),
   city: requiredText('City'),

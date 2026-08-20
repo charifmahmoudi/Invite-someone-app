@@ -27,7 +27,10 @@ export type AppIconName =
   | 'group'
   | 'send'
   | 'heart'
-  | 'info';
+  | 'info'
+  | 'filter'
+  | 'map'
+  | 'list';
 
 const symbols: Record<AppIconName, SymbolViewProps['name']> = {
   home: { ios: 'house.fill', android: 'home', web: 'home' },
@@ -56,6 +59,13 @@ const symbols: Record<AppIconName, SymbolViewProps['name']> = {
   send: { ios: 'paperplane.fill', android: 'send', web: 'send' },
   heart: { ios: 'heart.fill', android: 'favorite', web: 'favorite' },
   info: { ios: 'info.circle.fill', android: 'info', web: 'info' },
+  filter: {
+    ios: 'line.3.horizontal.decrease',
+    android: 'filter_list',
+    web: 'filter_list',
+  },
+  map: { ios: 'map.fill', android: 'map', web: 'map' },
+  list: { ios: 'list.bullet', android: 'view_list', web: 'view_list' },
 };
 
 interface AppIconProps {

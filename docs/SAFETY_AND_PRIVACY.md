@@ -11,11 +11,12 @@ Invite facilitates real-world meetings, so harm prevention cannot rely on a disc
 - Invitations are optional and offer an equally visible decline action.
 - First-meeting guidance recommends public places, independent transport, notifying someone, and leaving freely.
 - Activity time, place, host, attendees, visibility, capacity, and tone are shown before joining.
-- Invite-only activity authorization is enforced at the database layer.
+- Invite-only activity authorization is enforced by the API and its database filters.
 - A host cannot overbook the declared capacity through concurrent requests.
 - Recommendation scoring excludes sensitive personal traits.
-- Profile email is kept in Auth, not the member-visible profile table.
-- The client uses a publishable key only; authorization is enforced with RLS.
+- Other members' email addresses are removed from profile responses.
+- The people map uses broad neighbourhood centroids, labels itself approximate, and never requests live location.
+- MongoDB credentials and JWT signing secrets remain server-side; native bearer tokens use Android Keystore/iOS Keychain storage.
 
 ### Required before public launch
 
@@ -32,7 +33,7 @@ Invite facilitates real-world meetings, so harm prevention cannot rely on a disc
 
 ## Data minimization
 
-The MVP asks only for city-level location, social preferences, and profile copy. It does not request contacts, precise GPS, date of birth, gender, workplace, or address. Meeting-place text can still reveal sensitive locations; UI copy should continue to encourage public venues for early meetings.
+The MVP asks only for city/area-level location, social preferences, and profile copy. It does not request contacts, precise GPS, date of birth, gender, workplace, or address. Map coordinates are shared neighbourhood centroids rather than member coordinates. Meeting-place text can still reveal sensitive locations; UI copy should continue to encourage public venues for early meetings.
 
 ## Recommendation fairness
 
@@ -59,7 +60,7 @@ Reliability can help members feel safe but can also punish disability, caregivin
 ## Secrets and logging
 
 - `.env` is ignored; `.env.example` contains placeholders only.
-- `EXPO_PUBLIC_*` values are public by design. Only the Supabase URL and publishable key belong there.
+- `EXPO_PUBLIC_*` values are public by design. The HTTPS API address (and optional Supabase publishable values) may appear there; `MONGODB_URI` and `JWT_SECRET` must not.
 - Never log access tokens, invitation notes, precise meeting locations, or full profile payloads.
 - Use server-side structured audit events for moderation/security actions, with retention limits.
 - Rotate exposed secrets immediately and review Git history; removing only the latest file is insufficient.

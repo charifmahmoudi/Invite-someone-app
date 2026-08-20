@@ -27,7 +27,14 @@ export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 export type ActivityVisibility = 'community' | 'invite-only';
 export type ActivityVibe = 'Easygoing' | 'Active' | 'Focused';
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
-export type SessionMode = 'demo' | 'local' | 'supabase';
+export type SessionMode = 'demo' | 'local' | 'mongodb' | 'supabase';
+
+export interface ApproximateLocation {
+  /** A broad public label such as a neighbourhood; never a street address. */
+  area: string;
+  /** GeoJSON coordinate order: longitude first, then latitude. */
+  coordinates: [longitude: number, latitude: number];
+}
 
 export interface Profile {
   id: string;
@@ -39,6 +46,8 @@ export interface Profile {
   city: string;
   initials: string;
   avatarColor: string;
+  avatarUrl?: string;
+  approximateLocation?: ApproximateLocation;
   interests: ActivityCategory[];
   availability: string[];
   connectionGoals: string[];
@@ -113,6 +122,7 @@ export interface SignInInput {
 
 export interface ProfileUpdateInput {
   name: string;
+  avatarUrl?: string;
   headline: string;
   bio: string;
   city: string;

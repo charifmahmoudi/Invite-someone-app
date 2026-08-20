@@ -4,6 +4,20 @@ import { appReducer, createInitialState } from '@/domain/app-reducer';
 import { createSeedData, DEMO_USER_ID } from '@/data/seed';
 import { clearPersistedState, loadPersistedState, savePersistedState } from '@/data/storage';
 import {
+  createMongoActivity,
+  createMongoInvitations,
+  getMongoSession,
+  isMongoApiConfigured,
+  joinMongoActivity,
+  loadMongoData,
+  respondMongoInvitation,
+  setMongoActivitySaved,
+  signInMongo,
+  signOutMongo,
+  signUpMongo,
+  updateMongoProfile,
+} from '@/data/mongodb-api';
+import {
   createRemoteActivity,
   createRemoteInvitations,
   getRemoteSession,
@@ -55,6 +69,7 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const isRemoteBackendConfigured = isMongoApiConfigured || isSupabaseConfigured;
 
 const friendlyError = (error: unknown) =>
   error instanceof Error ? error : new Error('Something went wrong. Please try again.');
@@ -67,7 +82,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const hydrate = async () => {
       try {
-        if (isSupabaseConfigured) {
+        if (isMongoApiConfigured) {
+          const remoteSession = await getMongoSession();
+          if (remoteSession) {
+            const data = await loadMongoData();
+            if (active) {
+              dispatch({
+                type: 'hydrate',
+                data,
+                session: { userId: remoteSession.userId, mode: 'mongodb' },
+              });
+            }
+            return;
+          }
+        } else if (isSupabaseConfigured) {
           const remoteSession = await getRemoteSession();
           if (remoteSession) {
             const data = await loadRemoteData(remoteSession.user.id);
@@ -101,7 +129,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!state.hydrated || isSupabaseConfigured || state.session?.mode === 'supabase') return;
+    if (
+      !state.hydrated ||
+      isRemoteBackendConfigured ||
+      state.session?.mode === 'mongodb' ||
+      state.session?.mode === 'supabase'
+    )
+      return;
     void savePersistedState({
       version: 1,
       data: {
@@ -140,6 +174,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(
     (input: SignInInput) =>
       run(async () => {
+        if (isMongoApiConfigured) {
+          const remote = await signInMongo({
+            email: input.email.trim(),
+            password: input.password,
+          });
+          const data = await loadMongoData();
+          dispatch({
+            type: 'start-session',
+            session: { userId: remote.userId, mode: 'mongodb' },
+            data,
+          });
+          return;
+        }
+
         if (isSupabaseConfigured) {
           const remote = await signInRemote(input.email.trim(), input.password);
           const data = await loadRemoteData(remote.user.id);
@@ -167,6 +215,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signUp = useCallback(
     (input: SignUpInput) =>
       run(async (): Promise<SignUpResult> => {
+        if (isMongoApiConfigured) {
+          const remote = await signUpMongo({ ...input, email: input.email.trim() });
+          const data = await loadMongoData();
+          dispatch({
+            type: 'start-session',
+            session: { userId: remote.userId, mode: 'mongodb' },
+            data,
+          });
+          return { requiresEmailConfirmation: false };
+        }
+
         if (isSupabaseConfigured) {
           const remote = await signUpRemote(input.email.trim(), input.password, {
             name: input.name,
@@ -224,6 +283,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(
     () =>
       run(async () => {
+        if (state.session?.mode === 'mongodb') await signOutMongo();
         if (state.session?.mode === 'supabase') await signOutRemote();
         dispatch({ type: 'end-session' });
       }),
@@ -244,8 +304,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           bio: input.bio.trim(),
           initials: initialsFromName(input.name),
         };
+        const savedProfile =
+          state.session?.mode === 'mongodb' ? await updateMongoProfile(profile) : profile;
         if (state.session?.mode === 'supabase') await updateRemoteProfile(profile);
-        dispatch({ type: 'update-profile', profile });
+        dispatch({ type: 'update-profile', profile: savedProfile });
       }),
     [run, state.profiles, state.session],
   );
@@ -263,9 +325,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           invitedIds: [],
           createdAt: new Date().toISOString(),
         };
+        const savedActivity =
+          state.session?.mode === 'mongodb' ? await createMongoActivity(activity) : activity;
         if (state.session?.mode === 'supabase') await createRemoteActivity(activity);
-        dispatch({ type: 'create-activity', activity });
-        return activity;
+        dispatch({ type: 'create-activity', activity: savedActivity });
+        return savedActivity;
       }),
     [run, state.session],
   );
@@ -300,9 +364,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }));
 
         if (invitations.length === 0) return [];
+        const savedInvitations =
+          state.session?.mode === 'mongodb'
+            ? await createMongoInvitations(invitations)
+            : invitations;
         if (state.session?.mode === 'supabase') await createRemoteInvitations(invitations);
-        dispatch({ type: 'send-invitations', invitations });
-        return invitations;
+        dispatch({ type: 'send-invitations', invitations: savedInvitations });
+        return savedInvitations;
       }),
     [run, state.activities, state.invitations, state.session],
   );
@@ -313,6 +381,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const invitation = state.invitations.find((candidate) => candidate.id === invitationId);
         if (!invitation) throw new Error('The invitation could not be found.');
         const respondedAt = new Date().toISOString();
+        if (state.session?.mode === 'mongodb') {
+          await respondMongoInvitation(invitationId, status);
+        }
         if (state.session?.mode === 'supabase') {
           await respondRemoteInvitation(invitation, status, respondedAt);
         }
@@ -330,6 +401,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (activity.visibility !== 'community') throw new Error('This activity is invite-only.');
         if (activity.attendeeIds.length >= activity.capacity)
           throw new Error('This activity is full.');
+        if (state.session?.mode === 'mongodb') await joinMongoActivity(activityId);
         if (state.session?.mode === 'supabase') await joinRemoteActivity(activityId, userId);
         dispatch({ type: 'join-activity', activityId, userId });
       }),
@@ -342,6 +414,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const userId = state.session?.userId;
         if (!userId) throw new Error('Sign in to save an activity.');
         const willSave = !state.savedActivityIds.includes(activityId);
+        if (state.session?.mode === 'mongodb') {
+          await setMongoActivitySaved(activityId, willSave);
+        }
         if (state.session?.mode === 'supabase') {
           await setRemoteActivitySaved(activityId, userId, willSave);
         }
@@ -353,7 +428,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AppContextValue>(
     () => ({
       state,
-      isProductionBackend: isSupabaseConfigured,
+      isProductionBackend: isRemoteBackendConfigured,
       startDemo,
       signIn,
       signUp,

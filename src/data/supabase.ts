@@ -31,6 +31,10 @@ interface ProfileRow {
   city: string;
   initials: string;
   avatar_color: string;
+  avatar_url?: string | null;
+  approximate_area?: string | null;
+  approximate_longitude?: number | null;
+  approximate_latitude?: number | null;
   interests: Profile['interests'];
   availability: string[];
   connection_goals: string[];
@@ -87,6 +91,18 @@ const profileFromRow = (row: ProfileRow): Profile => ({
   city: row.city,
   initials: row.initials,
   avatarColor: row.avatar_color,
+  avatarUrl: row.avatar_url ?? undefined,
+  approximateLocation:
+    row.approximate_area &&
+    row.approximate_longitude !== null &&
+    row.approximate_longitude !== undefined &&
+    row.approximate_latitude !== null &&
+    row.approximate_latitude !== undefined
+      ? {
+          area: row.approximate_area,
+          coordinates: [row.approximate_longitude, row.approximate_latitude],
+        }
+      : undefined,
   interests: row.interests,
   availability: row.availability,
   connectionGoals: row.connection_goals,
@@ -120,6 +136,10 @@ const profileToRow = (profile: Profile) => ({
   city: profile.city,
   initials: profile.initials,
   avatar_color: profile.avatarColor,
+  avatar_url: profile.avatarUrl ?? null,
+  approximate_area: profile.approximateLocation?.area ?? null,
+  approximate_longitude: profile.approximateLocation?.coordinates[0] ?? null,
+  approximate_latitude: profile.approximateLocation?.coordinates[1] ?? null,
   interests: profile.interests,
   availability: profile.availability,
   connection_goals: profile.connectionGoals,

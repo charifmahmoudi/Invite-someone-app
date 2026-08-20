@@ -91,8 +91,14 @@ export default function PersonDetailsScreen() {
             {profile.isVerified ? <AppIcon name="shield" color={palette.forest} size={22} /> : null}
           </View>
           <Text style={styles.handle}>
-            @{profile.handle} · {profile.city}
+            @{profile.handle} · {profile.approximateLocation?.area ?? profile.city}
           </Text>
+          {profile.approximateLocation ? (
+            <View style={styles.approximateArea}>
+              <AppIcon name="shield" color={palette.forest} size={15} />
+              <Text style={styles.approximateAreaText}>Approximate area for privacy</Text>
+            </View>
+          ) : null}
           <Text style={styles.headline}>{profile.headline}</Text>
           <Text style={styles.bio}>{profile.bio}</Text>
           <View style={styles.stats}>
@@ -215,6 +221,8 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   name: { ...typography.h1, color: palette.ink },
   handle: { ...typography.small, color: palette.inkMuted },
+  approximateArea: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  approximateAreaText: { ...typography.micro, color: palette.forest },
   headline: { ...typography.h3, color: palette.ink, textAlign: 'center', marginTop: spacing.sm },
   bio: { ...typography.body, color: palette.inkMuted, textAlign: 'center' },
   stats: {

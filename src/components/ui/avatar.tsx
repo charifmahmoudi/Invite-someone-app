@@ -1,17 +1,20 @@
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { useState } from 'react';
+import { Image, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { palette } from '@/constants/theme';
 import type { Profile } from '@/types/domain';
 
 interface AvatarProps {
-  profile?: Pick<Profile, 'name' | 'initials' | 'avatarColor' | 'isVerified'>;
+  profile?: Pick<Profile, 'name' | 'initials' | 'avatarColor' | 'avatarUrl' | 'isVerified'>;
   size?: number;
   style?: ViewStyle;
 }
 
 export function Avatar({ profile, size = 44, style }: AvatarProps) {
+  const [failedUrl, setFailedUrl] = useState<string>();
   const initials = profile?.initials || '?';
   const fontSize = Math.max(12, size * 0.34);
+
   return (
     <View
       accessibilityLabel={profile ? `${profile.name}'s avatar` : 'Unknown person'}
@@ -27,6 +30,15 @@ export function Avatar({ profile, size = 44, style }: AvatarProps) {
       ]}
     >
       <Text style={[styles.initials, { fontSize }]}>{initials}</Text>
+      {profile?.avatarUrl && failedUrl !== profile.avatarUrl ? (
+        <Image
+          accessibilityElementsHidden
+          onError={() => setFailedUrl(profile.avatarUrl)}
+          resizeMode="cover"
+          source={{ uri: profile.avatarUrl }}
+          style={[styles.image, { width: size - 4, height: size - 4, borderRadius: size / 2 }]}
+        />
+      ) : null}
       {profile?.isVerified ? (
         <View
           accessibilityLabel="Verified profile"
@@ -54,6 +66,7 @@ const styles = StyleSheet.create({
     borderColor: palette.white,
   },
   initials: { color: palette.white, fontWeight: '800', letterSpacing: 0.3 },
+  image: { position: 'absolute' },
   verified: {
     position: 'absolute',
     right: -1,
