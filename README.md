@@ -52,7 +52,7 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 ## Installable builds
 
-Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.3` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission. Set the public repository Actions variable `INVITE_API_URL` before the build to connect that binary to a deployed MongoDB API.
+Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.4` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission. Preview 4 defaults to the live Render API; the public repository Actions variable `INVITE_API_URL` can override that URL for later environments.
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 

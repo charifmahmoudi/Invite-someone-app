@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/brand/icon.png",
       "bundleIdentifier": "com.charifmahmoudi.invite",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.charifmahmoudi.invite",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#EE6548",
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
