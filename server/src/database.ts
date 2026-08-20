@@ -1,6 +1,6 @@
 import { MongoClient, ServerApiVersion, type Collection, type Db, type Document } from 'mongodb';
 
-import type { Activity, Invitation, Profile } from '../../src/types/domain';
+import type { Activity, ApproximateLocation, Invitation, Profile } from '../../src/types/domain';
 import { config } from './config';
 
 export interface GeoPoint {
@@ -35,11 +35,18 @@ export interface SavedActivityDocument extends Document {
   createdAt: string;
 }
 
+export interface LocationCacheDocument extends Document {
+  _id: string;
+  location: ApproximateLocation | null;
+  resolvedAt: string;
+}
+
 export interface Collections {
   members: Collection<MemberDocument>;
   activities: Collection<ActivityDocument>;
   invitations: Collection<InvitationDocument>;
   savedActivities: Collection<SavedActivityDocument>;
+  locationCache: Collection<LocationCacheDocument>;
 }
 
 const client = new MongoClient(config.mongoUri, {
@@ -57,7 +64,8 @@ const client = new MongoClient(config.mongoUri, {
 let databasePromise: Promise<Db> | undefined;
 
 const createIndexes = async (database: Db) => {
-  const { members, activities, invitations, savedActivities } = collectionsFor(database);
+  const { members, activities, invitations, savedActivities, locationCache } =
+    collectionsFor(database);
   await Promise.all([
     members.createIndex({ emailNormalized: 1 }, { unique: true }),
     members.createIndex({ mapPoint: '2dsphere' }, { sparse: true }),
@@ -68,6 +76,7 @@ const createIndexes = async (database: Db) => {
     invitations.createIndex({ receiverId: 1, createdAt: -1 }),
     invitations.createIndex({ senderId: 1, createdAt: -1 }),
     savedActivities.createIndex({ userId: 1, activityId: 1 }, { unique: true }),
+    locationCache.createIndex({ resolvedAt: 1 }),
   ]);
 };
 
@@ -76,6 +85,7 @@ const collectionsFor = (database: Db): Collections => ({
   activities: database.collection<ActivityDocument>('activities'),
   invitations: database.collection<InvitationDocument>('invitations'),
   savedActivities: database.collection<SavedActivityDocument>('saved_activities'),
+  locationCache: database.collection<LocationCacheDocument>('location_cache'),
 });
 
 export const getDatabase = async () => {

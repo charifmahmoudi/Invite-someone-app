@@ -27,6 +27,9 @@ import {
   type InvitationDocument,
   type MemberDocument,
 } from './database';
+import { approximateLocationForCity } from './geocoding';
+
+const API_RELEASE = '1.0.0-preview.5';
 
 class HttpError extends Error {
   constructor(
@@ -49,6 +52,8 @@ const registerSchema = z.object({
   email: z.email('Enter a valid email address.'),
   password: z.string().min(8, 'Use at least 8 characters.').max(128),
   city: requiredText('City').max(80),
+  headline: requiredText('Headline', 4).max(80),
+  bio: requiredText('Bio', 20).max(320),
   interests: z.array(z.enum(ACTIVITY_CATEGORIES)).min(2).max(ACTIVITY_CATEGORIES.length),
   availability: z.array(z.string().trim().min(1).max(80)).min(1).max(8),
   connectionGoals: z.array(z.string().trim().min(1).max(80)).min(1).max(8),
@@ -121,12 +126,6 @@ const handleFromName = (name: string) =>
     .replace(/[^a-z0-9]+/g, '')
     .slice(0, 24) || `member${Date.now()}`;
 
-const knownCityLocations: Record<string, { area: string; coordinates: [number, number] }> = {
-  berlin: { area: 'Berlin (approximate)', coordinates: [13.405, 52.52] },
-  potsdam: { area: 'Potsdam (approximate)', coordinates: [13.0645, 52.3906] },
-};
-
-const locationForCity = (city: string) => knownCityLocations[city.trim().toLocaleLowerCase()];
 const mapPointForProfile = (profile: Profile): GeoPoint | undefined => {
   const coordinates = profile.approximateLocation?.coordinates;
   return coordinates ? { type: 'Point', coordinates } : undefined;
@@ -149,6 +148,55 @@ const invitationFromDocument = (document: InvitationDocument): Invitation => {
 
 const escapeRegularExpression = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const loadAppDataForUser = async (userId: string): Promise<AppData> => {
+  const { members, activities, invitations, savedActivities } = await getCollections();
+  const [memberDocuments, invitationDocuments, savedDocuments] = await Promise.all([
+    members.find({}).sort({ 'profile.name': 1 }).toArray(),
+    invitations
+      .find({ $or: [{ senderId: userId }, { receiverId: userId }] })
+      .sort({ createdAt: -1 })
+      .toArray(),
+    savedActivities.find({ userId }).toArray(),
+  ]);
+  const invitedActivityIds = invitationDocuments
+    .filter((invitation) => invitation.receiverId === userId && invitation.status !== 'cancelled')
+    .map((invitation) => invitation.activityId);
+  const activityDocuments = await activities
+    .find({
+      $or: [
+        { visibility: 'community' },
+        { hostId: userId },
+        { attendeeIds: userId },
+        { _id: { $in: invitedActivityIds } },
+      ],
+    })
+    .sort({ startAt: 1 })
+    .toArray();
+
+  const visibleInvitations = invitationDocuments.map(invitationFromDocument);
+  return {
+    profiles: memberDocuments.map((member) => publicProfile(member, userId)),
+    activities: activityDocuments.map((document) => {
+      const activity = activityFromDocument(document);
+      return {
+        ...activity,
+        invitedIds: [
+          ...new Set(
+            visibleInvitations
+              .filter(
+                (invitation) =>
+                  invitation.activityId === activity.id && invitation.status !== 'cancelled',
+              )
+              .map((invitation) => invitation.receiverId),
+          ),
+        ],
+      };
+    }),
+    invitations: visibleInvitations,
+    savedActivityIds: savedDocuments.map((saved) => saved.activityId),
+  };
+};
+
 export const createApp = () => {
   const app = express();
   app.disable('x-powered-by');
@@ -159,7 +207,7 @@ export const createApp = () => {
   app.get('/health', async (_request, response) => {
     const database = await getDatabase();
     await database.command({ ping: 1 });
-    response.json({ status: 'ok' });
+    response.json({ status: 'ok', release: API_RELEASE });
   });
 
   const authLimiter = rateLimit({
@@ -176,13 +224,16 @@ export const createApp = () => {
     const userId = randomUUID();
     const now = new Date().toISOString();
     const email = normalizeEmail(input.email);
-    const approximateLocation = locationForCity(input.city);
+    if (await members.findOne({ emailNormalized: email }, { projection: { _id: 1 } })) {
+      throw new HttpError(409, 'An account with this email already exists. Sign in instead.');
+    }
+    const approximateLocation = await approximateLocationForCity(input.city);
     const profile: Omit<Profile, 'email'> = {
       id: userId,
       name: input.name,
       handle: handleFromName(input.name),
-      headline: 'Ready for a few good plans',
-      bio: 'I joined Invite to meet kind people through small, comfortable activities.',
+      headline: input.headline,
+      bio: input.bio,
       city: input.city,
       initials: initialsFromName(input.name),
       avatarColor: '#315C4C',
@@ -207,16 +258,23 @@ export const createApp = () => {
       updatedAt: now,
     };
 
+    // Complete every fallible bootstrap read before the account write. This prevents a
+    // successful insert from being presented as a failed registration if a later read fails.
+    const [token, data] = await Promise.all([issueAccessToken(userId), loadAppDataForUser(userId)]);
+    data.profiles = [...data.profiles, { ...profile, email }].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+
     try {
       await members.insertOne(member);
     } catch (error) {
       if (error instanceof MongoServerError && error.code === 11000) {
-        throw new HttpError(409, 'An account with this email already exists.');
+        throw new HttpError(409, 'An account with this email already exists. Sign in instead.');
       }
       throw error;
     }
 
-    response.status(201).json({ userId, token: await issueAccessToken(userId) });
+    response.status(201).json({ userId, token, data });
   });
 
   app.post('/v1/auth/login', authLimiter, async (request, response) => {
@@ -226,7 +284,11 @@ export const createApp = () => {
     if (!member || !(await compare(input.password, member.passwordHash))) {
       throw new HttpError(401, 'The email or password is incorrect.');
     }
-    response.json({ userId: member._id, token: await issueAccessToken(member._id) });
+    const [token, data] = await Promise.all([
+      issueAccessToken(member._id),
+      loadAppDataForUser(member._id),
+    ]);
+    response.json({ userId: member._id, token, data });
   });
 
   app.use('/v1', requireAuthentication);
@@ -237,53 +299,7 @@ export const createApp = () => {
 
   app.get('/v1/data', async (_request, response) => {
     const userId = authenticatedUserId(response);
-    const { members, activities, invitations, savedActivities } = await getCollections();
-    const [memberDocuments, invitationDocuments, savedDocuments] = await Promise.all([
-      members.find({}).sort({ 'profile.name': 1 }).toArray(),
-      invitations
-        .find({ $or: [{ senderId: userId }, { receiverId: userId }] })
-        .sort({ createdAt: -1 })
-        .toArray(),
-      savedActivities.find({ userId }).toArray(),
-    ]);
-    const invitedActivityIds = invitationDocuments
-      .filter((invitation) => invitation.receiverId === userId && invitation.status !== 'cancelled')
-      .map((invitation) => invitation.activityId);
-    const activityDocuments = await activities
-      .find({
-        $or: [
-          { visibility: 'community' },
-          { hostId: userId },
-          { attendeeIds: userId },
-          { _id: { $in: invitedActivityIds } },
-        ],
-      })
-      .sort({ startAt: 1 })
-      .toArray();
-
-    const visibleInvitations = invitationDocuments.map(invitationFromDocument);
-    const data: AppData = {
-      profiles: memberDocuments.map((member) => publicProfile(member, userId)),
-      activities: activityDocuments.map((document) => {
-        const activity = activityFromDocument(document);
-        return {
-          ...activity,
-          invitedIds: [
-            ...new Set(
-              visibleInvitations
-                .filter(
-                  (invitation) =>
-                    invitation.activityId === activity.id && invitation.status !== 'cancelled',
-                )
-                .map((invitation) => invitation.receiverId),
-            ),
-          ],
-        };
-      }),
-      invitations: visibleInvitations,
-      savedActivityIds: savedDocuments.map((saved) => saved.activityId),
-    };
-    response.json(data);
+    response.json(await loadAppDataForUser(userId));
   });
 
   app.get('/v1/profiles', async (request, response) => {
@@ -353,7 +369,7 @@ export const createApp = () => {
       avatarUrl: avatarUrl === null ? undefined : (avatarUrl ?? existing.profile.avatarUrl),
       initials: initialsFromName(input.name),
       approximateLocation: cityChanged
-        ? locationForCity(input.city)
+        ? await approximateLocationForCity(input.city)
         : existing.profile.approximateLocation,
     };
     const mapPoint = mapPointForProfile(profile);

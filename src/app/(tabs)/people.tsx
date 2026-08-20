@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PeopleMap } from '@/components/people-map';
@@ -69,8 +69,10 @@ export default function PeopleScreen() {
     setMaxDistanceKm(undefined);
     setVerifiedOnly(false);
   };
-  const openProfile = (profile: Profile) =>
-    router.push({ pathname: '/person/[id]', params: { id: profile.id } });
+  const openProfile = useCallback(
+    (profile: Profile) => router.push({ pathname: '/person/[id]', params: { id: profile.id } }),
+    [router],
+  );
 
   return (
     <Screen>
@@ -217,7 +219,9 @@ export default function PeopleScreen() {
           <Text style={styles.count}>
             {results.length} {results.length === 1 ? 'person' : 'people'}
           </Text>
-          <Text style={styles.orderHint}>Common ground first</Text>
+          <Text style={styles.orderHint}>
+            {viewMode === 'map' ? 'Approximate areas' : 'Common ground first'}
+          </Text>
         </View>
 
         {results.length > 0 && viewMode === 'map' ? (

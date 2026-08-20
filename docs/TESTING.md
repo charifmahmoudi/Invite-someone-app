@@ -2,7 +2,7 @@
 
 ## Quality gates
 
-Every pull request runs four independent gates:
+Every pull request runs five independent gates:
 
 1. Strict TypeScript compilation
 2. ESLint, including React Hooks purity/compiler rules
@@ -10,7 +10,7 @@ Every pull request runs four independent gates:
 4. A production static web export to catch bundling and route failures
 5. An Android native preview build on every pull request and `main` update
 
-The native workflow builds the Android release variant and fails unless `assets/index.android.bundle` is embedded in the APK. It then uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.4` prerelease for direct Android device testing. Preview 4 is compiled with the live Render API URL unless `INVITE_API_URL` overrides it. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
+The native workflow builds the Android release variant and fails unless `assets/index.android.bundle` is embedded in the APK. It then uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.5` prerelease for direct Android device testing. Preview 5 is compiled with the live Render API URL unless `INVITE_API_URL` overrides it. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
 
 Run the same checks locally:
 
@@ -31,7 +31,7 @@ npm run export:web -- --output-dir dist
 
 `matching.test.ts` verifies that explanations use the declared signals and that ineligible profiles are excluded. It also protects a relevant ranking example. This suite should grow alongside fairness and location changes.
 
-`profile-discovery.test.ts` verifies biography/area search, combined interests/availability/goals/verification/distance filters, approximate Haversine distance, and bounded map projection.
+`profile-discovery.test.ts` verifies biography/area search, combined interests/availability/goals/verification/distance filters, approximate Haversine distance, and non-degenerate real-map bounds containing every broad-area point.
 
 ### User-story transitions
 

@@ -18,16 +18,23 @@ export default function ProfileScreen() {
   const hosted = state.activities.filter((activity) => activity.hostId === profile?.id);
 
   const logout = () => {
-    Alert.alert('Sign out?', 'Your locally saved demo data will remain on this device.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: () => {
-          void signOut().then(() => router.replace('/(auth)/welcome'));
+    const isLocalSession = state.session?.mode === 'demo' || state.session?.mode === 'local';
+    Alert.alert(
+      'Sign out?',
+      isLocalSession
+        ? 'Your local preview data will remain on this device.'
+        : 'You can sign back in with your email and password.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: () => {
+            void signOut().then(() => router.replace('/(auth)/welcome'));
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   if (!profile) return null;
@@ -59,7 +66,7 @@ export default function ProfileScreen() {
             <Text style={styles.headline}>{profile.headline}</Text>
             <Text style={styles.bio}>{profile.bio}</Text>
           </View>
-          {state.session?.mode !== 'supabase' ? (
+          {state.session?.mode === 'demo' || state.session?.mode === 'local' ? (
             <View style={styles.modeBadge}>
               <AppIcon name="info" color={palette.forest} size={16} />
               <Text style={styles.modeText}>
@@ -148,7 +155,7 @@ export default function ProfileScreen() {
         </View>
 
         <Button icon="logout" label="Sign out" onPress={logout} variant="danger" />
-        <Text style={styles.version}>Invite · MVP 1.0</Text>
+        <Text style={styles.version}>Invite · Preview 5</Text>
       </ScrollView>
     </Screen>
   );

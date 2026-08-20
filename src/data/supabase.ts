@@ -181,6 +181,8 @@ export const signUpRemote = async (
   metadata: {
     name: string;
     city: string;
+    headline: string;
+    bio: string;
     interests: string[];
     availability: string[];
     connectionGoals: string[];
@@ -194,6 +196,8 @@ export const signUpRemote = async (
       data: {
         name: metadata.name,
         city: metadata.city,
+        headline: metadata.headline,
+        bio: metadata.bio,
         interests: metadata.interests,
         availability: metadata.availability,
         connection_goals: metadata.connectionGoals,

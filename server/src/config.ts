@@ -15,6 +15,11 @@ const environmentSchema = z.object({
   JWT_SECRET: z.string().min(32).default(DEVELOPMENT_JWT_SECRET),
   PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   CORS_ORIGINS: z.string().default('*'),
+  GEOCODING_BASE_URL: z.url().default('https://nominatim.openstreetmap.org/'),
+  GEOCODING_USER_AGENT: z
+    .string()
+    .min(10)
+    .default('InviteSomeone/1.0 (+https://github.com/charifmahmoudi/Invite-someone-app)'),
 });
 
 const parsed = environmentSchema.parse(process.env);
@@ -28,6 +33,8 @@ export const config = {
   databaseName: parsed.MONGODB_DB_NAME,
   jwtSecret: parsed.JWT_SECRET,
   port: parsed.PORT,
+  geocodingBaseUrl: parsed.GEOCODING_BASE_URL,
+  geocodingUserAgent: parsed.GEOCODING_USER_AGENT,
   corsOrigins:
     parsed.CORS_ORIGINS === '*'
       ? '*'

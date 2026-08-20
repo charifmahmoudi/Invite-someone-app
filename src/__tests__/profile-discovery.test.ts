@@ -1,7 +1,8 @@
 import {
+  approximateMapBounds,
   approximateDistanceKm,
   discoverProfiles,
-  projectProfilesForMap,
+  profilesWithApproximateLocations,
   type ProfileDiscoveryFilters,
 } from '@/domain/profile-discovery';
 import { seedProfiles } from '@/data/seed';
@@ -42,16 +43,27 @@ describe('people discovery', () => {
     expect(result.map(({ profile }) => profile.id)).toEqual(['profile-maya', 'profile-sofia']);
   });
 
-  it('US-12 uses broad coordinates for distance and bounded map pins', () => {
+  it('US-12 uses broad coordinates and fits them inside real map bounds', () => {
     expect(approximateDistanceKm(seedProfiles[0], seedProfiles[1])).toBeLessThan(10);
 
-    const points = projectProfilesForMap(seedProfiles);
-    expect(points).toHaveLength(seedProfiles.length);
-    points.forEach(({ x, y }) => {
-      expect(x).toBeGreaterThanOrEqual(0.1);
-      expect(x).toBeLessThanOrEqual(0.9);
-      expect(y).toBeGreaterThanOrEqual(0.1);
-      expect(y).toBeLessThanOrEqual(0.9);
+    const locatedProfiles = profilesWithApproximateLocations(seedProfiles);
+    const bounds = approximateMapBounds(seedProfiles);
+    expect(locatedProfiles).toHaveLength(seedProfiles.length);
+    expect(bounds).toBeDefined();
+    const [west, south, east, north] = bounds!;
+    locatedProfiles.forEach(({ approximateLocation }) => {
+      const [longitude, latitude] = approximateLocation.coordinates;
+      expect(longitude).toBeGreaterThanOrEqual(west);
+      expect(longitude).toBeLessThanOrEqual(east);
+      expect(latitude).toBeGreaterThanOrEqual(south);
+      expect(latitude).toBeLessThanOrEqual(north);
     });
+  });
+
+  it('US-12 expands one broad area into a usable map viewport', () => {
+    const bounds = approximateMapBounds([seedProfiles[0]]);
+    expect(bounds).toBeDefined();
+    expect(bounds![2] - bounds![0]).toBeCloseTo(0.025, 6);
+    expect(bounds![3] - bounds![1]).toBeCloseTo(0.025, 6);
   });
 });

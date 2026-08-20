@@ -12,17 +12,28 @@ import type {
   SignUpInput,
 } from '@/types/domain';
 
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '');
+const DEFAULT_API_URL = 'https://invite-someone-api.onrender.com';
+const environmentApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '');
+const localDemoRequested = process.env.EXPO_PUBLIC_ENABLE_LOCAL_DEMO === 'true';
+// Release builds fail closed to the deployed API. Local demo mode now requires an explicit opt-in.
+const configuredApiUrl = environmentApiUrl || (localDemoRequested ? undefined : DEFAULT_API_URL);
 const SESSION_KEY = '@invite/mongodb-session/v1';
+const REQUEST_TIMEOUT_MS = 45_000;
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
 export const isMongoApiConfigured = Boolean(configuredApiUrl);
+export const isLocalDemoEnabled = localDemoRequested && !environmentApiUrl;
 
 interface StoredApiSession {
   token: string;
   userId: string;
+}
+
+interface AuthenticationResponse extends StoredApiSession {
+  /** Newer APIs return bootstrap data atomically with authentication. */
+  data?: AppData;
 }
 
 interface ApiErrorBody {
@@ -61,11 +72,12 @@ const request = async <T>(
   path: string,
   options: RequestInit = {},
   authenticated = true,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> => {
   if (!configuredApiUrl) throw new Error('The Invite API is not configured.');
   const session = authenticated ? await readSession() : null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${configuredApiUrl}${path}`, {
@@ -90,7 +102,9 @@ const request = async <T>(
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('The server took too long to respond. Check your connection and try again.');
+      throw new Error(
+        'The Invite service took too long to respond. It may be waking up; wait a moment and try again.',
+      );
     }
     throw new Error('Could not reach the Invite server. Check your connection and try again.');
   } finally {
@@ -112,15 +126,16 @@ export const getMongoSession = async (): Promise<{ userId: string } | null> => {
   }
 };
 
-const storeAuthenticatedSession = async (session: StoredApiSession) => {
-  const serialized = JSON.stringify(session);
+const storeAuthenticatedSession = async <T extends StoredApiSession>(session: T): Promise<T> => {
+  // Bootstrap data can be large and is intentionally never copied into secure token storage.
+  const serialized = JSON.stringify({ token: session.token, userId: session.userId });
   if (Platform.OS === 'web') await AsyncStorage.setItem(SESSION_KEY, serialized);
   else await SecureStore.setItemAsync(SESSION_KEY, serialized, secureStoreOptions);
   return session;
 };
 
 export const signInMongo = async (input: SignInInput) => {
-  const session = await request<StoredApiSession>(
+  const session = await request<AuthenticationResponse>(
     '/v1/auth/login',
     { method: 'POST', body: JSON.stringify(input) },
     false,
@@ -129,7 +144,7 @@ export const signInMongo = async (input: SignInInput) => {
 };
 
 export const signUpMongo = async (input: SignUpInput) => {
-  const session = await request<StoredApiSession>(
+  const session = await request<AuthenticationResponse>(
     '/v1/auth/register',
     { method: 'POST', body: JSON.stringify(input) },
     false,
@@ -138,6 +153,16 @@ export const signUpMongo = async (input: SignUpInput) => {
 };
 
 export const signOutMongo = removeSession;
+
+/** Starts a sleeping free-tier service before the user submits a form. */
+export const warmMongoApi = async () => {
+  try {
+    await request<{ status: 'ok' }>('/health', {}, false, 60_000);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const loadMongoData = () => request<AppData>('/v1/data');
 

@@ -9,14 +9,14 @@ The same TypeScript codebase runs on iPhone, Android, and the web using Expo SDK
 - Guided account creation with interests, availability, and connection goals
 - Personalized activity feed with category filters and saved plans
 - Photo-backed people discovery with biography, interest, availability, goal, trust, and distance filters
-- Privacy-first approximate-area map with no exact home pins or location permission
+- Interactive MapLibre people map with key-free OpenFreeMap tiles, broad-area pins, and no location permission
 - Complete host flow: create an activity, set capacity and visibility, and invite recommended people
 - Received and sent invitation inboxes with accept, decline, and cancel states
 - Community activities that members can join, with transactional capacity protection in production
 - Profile editing, attendance history, reliability signals, and hosted plans
 - First-meeting safety guidance embedded in invitation and activity flows
 - Smooth native navigation, press animations, haptics, responsive layouts, and accessible labels
-- Local demo mode plus a server-side MongoDB API with secure mobile sessions
+- Server-side MongoDB accounts with secure mobile sessions; local demo mode is development-only and opt-in
 
 ## Quick start
 
@@ -52,7 +52,7 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 ## Installable builds
 
-Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.4` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission. Preview 4 defaults to the live Render API; the public repository Actions variable `INVITE_API_URL` can override that URL for later environments.
+Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.5` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission. Preview 5 connects to the live Render API, removes the production demo bypass, and includes the native interactive map. The public repository Actions variable `INVITE_API_URL` can override the API URL for later environments.
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 
@@ -70,20 +70,26 @@ npx eas-cli build --platform ios --profile preview
 
 The iOS command prompts the authorized Apple Developer account when credentials have not been configured. An unsigned iOS archive is deliberately not published because it cannot be installed on a physical iPhone.
 
-## Try the complete demo
+## Optional local demo for development
 
-No backend is required for product review. On the welcome screen, choose **Explore the demo**. Demo changes are persisted on the device with AsyncStorage.
+Connected and release builds never show a demo shortcut. To work offline on the UI, explicitly start a development build with local demo mode enabled:
+
+```bash
+EXPO_PUBLIC_ENABLE_LOCAL_DEMO=true npm start
+```
+
+On the welcome screen, choose **Explore the local demo**. Demo changes are persisted on that device with AsyncStorage.
 
 You can also use the local sign-in screen:
 
 - Email: `demo@invite.app`
 - Password: any non-empty value
 
-Local account creation intentionally stores no password. It exists only to exercise onboarding in preview mode.
+Local account creation intentionally stores no password. It exists only to exercise onboarding during development.
 
 ## Connect MongoDB
 
-Invite uses the MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the entire instance.
+Invite defaults to the deployed HTTPS API at `https://invite-someone-api.onrender.com`; `EXPO_PUBLIC_API_URL` overrides it for staging or local development. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the entire instance.
 
 1. Create a MongoDB Atlas deployment or a local replica set.
 2. Copy `server/.env.example` to `.env.server` and set `MONGODB_URI`, `MONGODB_DB_NAME`, and a strong `JWT_SECRET`. Development defaults point to `mongodb://127.0.0.1:27017` and production refuses the development JWT secret.
@@ -91,7 +97,7 @@ Invite uses the MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone nev
 4. Deploy the API behind HTTPS and set `EXPO_PUBLIC_API_URL=https://your-api.example` in the mobile build environment.
 5. Restart/rebuild Expo because `EXPO_PUBLIC_*` values are embedded into the application bundle.
 
-The API hashes passwords, rate-limits authentication, keeps bearer sessions in Android Keystore/iOS Keychain storage, removes member emails from public profile responses, protects every mutation with server authorization, uses a `2dsphere` index for coarse discovery, and performs invitation acceptance plus attendance in a MongoDB transaction. See [MongoDB backend setup](./docs/MONGODB_BACKEND.md).
+The API hashes passwords, rate-limits authentication, returns registration bootstrap data atomically, keeps bearer sessions in Android Keystore/iOS Keychain storage, removes member emails from public profile responses, protects every mutation with server authorization, caches city-only geocoding, uses a `2dsphere` index for coarse discovery, and performs invitation acceptance plus attendance in a MongoDB transaction. See [MongoDB backend setup](./docs/MONGODB_BACKEND.md).
 
 The previous Supabase adapter and migration remain available as a compatibility path when no MongoDB API URL is configured.
 
@@ -125,7 +131,7 @@ The previous Supabase adapter and migration remain available as a compatibility 
 
 ## Project status
 
-This repository contains a functional, testable MVP. Push notifications, chat, moderation operations, image uploads, localization, analytics, and app-store release credentials are intentionally listed as post-MVP work rather than represented as finished features.
+This repository contains a functional, testable MVP. Push notifications, chat, moderation operations, direct image uploads, localization, analytics, and app-store release credentials are intentionally listed as post-MVP work rather than represented as finished features.
 
 ## License
 

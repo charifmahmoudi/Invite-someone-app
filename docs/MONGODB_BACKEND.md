@@ -10,13 +10,15 @@ The MongoDB connection string is a server credential. Android APK and iPhone IPA
 cp server/.env.example .env.server
 ```
 
-| Variable          | Required in production | Purpose                                   |
-| ----------------- | ---------------------- | ----------------------------------------- |
-| `MONGODB_URI`     | Yes                    | Atlas/self-hosted connection string       |
-| `MONGODB_DB_NAME` | Yes                    | Database name, normally `invite_someone`  |
-| `JWT_SECRET`      | Yes                    | 32+ character access-token signing secret |
-| `PORT`            | No                     | HTTP port, defaults to `4000`             |
-| `CORS_ORIGINS`    | Recommended            | Comma-separated browser origins or `*`    |
+| Variable               | Required in production | Purpose                                   |
+| ---------------------- | ---------------------- | ----------------------------------------- |
+| `MONGODB_URI`          | Yes                    | Atlas/self-hosted connection string       |
+| `MONGODB_DB_NAME`      | Yes                    | Database name, normally `invite_someone`  |
+| `JWT_SECRET`           | Yes                    | 32+ character access-token signing secret |
+| `PORT`                 | No                     | HTTP port, defaults to `4000`             |
+| `CORS_ORIGINS`         | Recommended            | Comma-separated browser origins or `*`    |
+| `GEOCODING_BASE_URL`   | No                     | Swappable city geocoder endpoint          |
+| `GEOCODING_USER_AGENT` | Recommended            | Identifies this API to the geocoder       |
 
 The committed fallback URI is local development access only. `.env.server` is ignored by Git. Do not prefix server secrets with `EXPO_PUBLIC_`, paste them into GitHub Actions, or commit them.
 
@@ -47,7 +49,7 @@ After creating the service:
 4. keep the workflow's live Render URL or set the GitHub Actions variable `INVITE_API_URL` to override it, without a trailing slash;
 5. rebuild the phone binaries because `EXPO_PUBLIC_API_URL` is embedded at build time.
 
-Render free services sleep after inactivity, so the first request after a quiet period can take longer. The mobile client uses a bounded request timeout and provides a retryable connection message.
+Render free services sleep after inactivity, so the first request after a quiet period can take longer. Auth screens warm the service in the background and use a bounded 45-second request timeout with a retryable message. Registration and login return the secure session plus initial app data together, so a completed account write cannot be misreported because a second bootstrap request failed.
 
 ## Connect a development client
 
@@ -71,6 +73,9 @@ Changing the URL requires a new binary. MongoDB credentials can be rotated or ch
 - `activities`: host, content, visibility, capacity, attendee IDs, and timing;
 - `invitations`: sender/receiver lifecycle with a concurrency-safe active key;
 - `saved_activities`: private per-member bookmarks.
+- `location_cache`: city-only geocoding results and misses, cached to avoid repeat public requests.
+
+City geocoding is performed only by the API, never directly by a phone. It sends the member-provided city name—not a street address or device position—serializes external requests to at most one per second, uses an identifying user agent, and caches results in MongoDB. The default public Nominatim endpoint is appropriate only for a moderate MVP under its [usage policy](https://operations.osmfoundation.org/policies/nominatim/); `GEOCODING_BASE_URL` can be changed on Render without shipping a new mobile binary. Map tiles come from OpenFreeMap and retain required map attribution.
 
 Passwords use bcrypt. JWTs expire after 30 days and are stored with Expo SecureStore on native devices. API reads omit other members’ email addresses. Community joining uses one atomic activity update. Accepting an invitation updates attendance and invitation state in one MongoDB transaction so a full activity cannot produce a false acceptance.
 

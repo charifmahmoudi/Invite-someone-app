@@ -96,9 +96,9 @@ export default function EditProfileScreen() {
           <InputField
             autoCapitalize="none"
             autoCorrect={false}
-            hint="Use a direct HTTPS image link. Photo upload storage can be added before launch."
+            hint="Use a direct HTTPS link to a photo you control."
             keyboardType="url"
-            label="Profile photo URL (optional)"
+            label="Profile photo link (optional)"
             onChangeText={setAvatarUrl}
             placeholder="https://example.com/my-photo.jpg"
             value={avatarUrl}

@@ -8,11 +8,11 @@ Invite is a universal Expo Router application. Route components compose reusable
 flowchart TD
   Screens[Expo Router screens] --> Context[AppProvider commands]
   Context --> Domain[Validation, matching, reducer]
-  Context --> Mode{Backend configured?}
-  Mode -->|No| Local[AsyncStorage + demo seed]
-  Mode -->|Mongo API| API[Express API + JWT]
+  Context --> Mode{Explicit local demo?}
+  Mode -->|Yes| Local[AsyncStorage + demo seed]
+  Mode -->|No| API[Express API + JWT]
   API --> DB[MongoDB + indexes + transactions]
-  Mode -->|Legacy| Client[Supabase client]
+  Context -->|Explicit legacy config| Client[Supabase client]
   Client --> Legacy[Auth + Postgres RLS]
 ```
 
@@ -30,18 +30,19 @@ flowchart TD
 | Session storage        | Expo SecureStore on Android/iOS                          | Keystore/Keychain protection for API bearer tokens                             |
 | Tests                  | Jest / jest-expo                                         | Expo-aligned unit tests with story traceability                                |
 | UI                     | Native primitives, Expo Symbols, LinearGradient, Haptics | Consistent native behavior with a small dependency surface                     |
+| Maps                   | MapLibre Native/Web + OpenFreeMap                        | Interactive cross-platform maps without proprietary keys; attribution retained |
 
 ## Runtime modes
 
 ### Local preview mode
 
-When no remote backend variable is present, the app loads a realistic seed snapshot. A user can open the complete demo or create a local preview profile. State changes are serialized to one versioned AsyncStorage key. Passwords are never persisted or validated in this mode.
+Local preview mode is disabled by default. A developer must explicitly set `EXPO_PUBLIC_ENABLE_LOCAL_DEMO=true` without an API override to load the seed snapshot. A user can then open the local demo or create a local preview profile. State changes are serialized to one versioned AsyncStorage key. Passwords are never persisted or validated in this mode.
 
 This mode is for product review, automated UI work, and offline development—not real accounts.
 
 ### Production backend mode
 
-When `EXPO_PUBLIC_API_URL` exists, the app authenticates against the Express API and stores the signed session token in Expo SecureStore on native devices. The API owns MongoDB credentials, returns only authorized data, and validates every mutation. Commands write remotely first and dispatch locally only after success, avoiding a false-success UI. The existing Supabase adapter is retained as a secondary compatibility mode when its two public values are configured and the Mongo API URL is absent.
+The app defaults to the deployed Render API; `EXPO_PUBLIC_API_URL` overrides it for staging or local servers. It authenticates against Express and stores the signed session token in Expo SecureStore on native devices. The API owns MongoDB credentials, returns only authorized data, and validates every mutation. Authentication returns bootstrap data atomically, and other commands write remotely before dispatching locally. The existing Supabase adapter remains only as a compatibility path for explicitly reconfigured development builds.
 
 ## Command flow
 
@@ -100,6 +101,7 @@ Host, attendee, and already-invited profiles are excluded. This is a determinist
 ## Error and offline behavior
 
 - Corrupt local state falls back to seed data rather than blocking launch.
+- Connected builds never hydrate seed data or expose a credential-free demo route.
 - Remote mutations dispatch an error and leave the previous entity state intact.
 - The MVP does not queue production mutations offline. Adding an operation log requires conflict semantics per command; blind last-write-wins is not appropriate for invitations or capacity.
 - Mongo API tokens persist in encrypted platform storage. Authorization lives in API route checks and database filters, not in local route guards.

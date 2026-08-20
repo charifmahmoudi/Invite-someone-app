@@ -23,7 +23,22 @@ export const signUpBasicsSchema = z.object({
   city: requiredText('City'),
 });
 
+export const signUpCredentialsSchema = signUpBasicsSchema
+  .extend({
+    confirmPassword: z.string().min(1, 'Confirm your password.'),
+  })
+  .refine((input) => input.password === input.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match.',
+  });
+
+export const signUpIntroductionSchema = z.object({
+  headline: requiredText('Headline', 4).max(80, 'Keep your headline under 80 characters.'),
+  bio: requiredText('Bio', 20).max(320, 'Keep your bio under 320 characters.'),
+});
+
 export const signUpSchema = signUpBasicsSchema.extend({
+  ...signUpIntroductionSchema.shape,
   interests: z.array(z.enum(ACTIVITY_CATEGORIES)).min(2, 'Choose at least two interests.'),
   availability: z.array(z.string()).min(1, 'Choose when you are usually free.'),
   connectionGoals: z.array(z.string()).min(1, 'Choose what you are looking for.'),

@@ -1,10 +1,18 @@
-import { activityDraftSchema, profileUpdateSchema, signUpSchema } from '@/domain/validation';
+import {
+  activityDraftSchema,
+  profileUpdateSchema,
+  signUpCredentialsSchema,
+  signUpIntroductionSchema,
+  signUpSchema,
+} from '@/domain/validation';
 
 const validSignUp = {
   name: 'Taylor Reed',
   email: 'taylor@example.com',
   password: 'safe-password',
   city: 'Berlin',
+  headline: 'Coffee walks and gallery afternoons',
+  bio: 'I enjoy relaxed plans, thoughtful conversation, and discovering new places together.',
   interests: ['Coffee', 'Arts'] as const,
   availability: ['Saturday'],
   connectionGoals: ['New friends'],
@@ -27,6 +35,26 @@ describe('profile and activity validation', () => {
         expect.arrayContaining(['password', 'interests']),
       );
     }
+  });
+
+  it('US-01 requires password confirmation before registration', () => {
+    const result = signUpCredentialsSchema.safeParse({
+      name: validSignUp.name,
+      email: validSignUp.email,
+      password: validSignUp.password,
+      confirmPassword: 'different-password',
+      city: validSignUp.city,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe('Passwords do not match.');
+    }
+  });
+
+  it('US-01 requires a useful public introduction', () => {
+    expect(signUpIntroductionSchema.safeParse({ headline: 'Hi', bio: 'Too short' }).success).toBe(
+      false,
+    );
   });
 
   it('US-02 requires a useful bio and at least two interests', () => {

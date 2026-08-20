@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -7,15 +7,20 @@ import { InputField } from '@/components/ui/input-field';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScrollScreen } from '@/components/ui/screen';
 import { palette, radius, spacing, typography } from '@/constants/theme';
+import { warmMongoApi } from '@/data/mongodb-api';
 import { firstValidationMessage, signInSchema } from '@/domain/validation';
 import { useApp } from '@/state/app-context';
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { signIn, state, isProductionBackend } = useApp();
+  const { canUseDemo, signIn, state, isProductionBackend } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string>();
+
+  useEffect(() => {
+    if (isProductionBackend) void warmMongoApi();
+  }, [isProductionBackend]);
 
   const submit = async () => {
     const result = signInSchema.safeParse({ email: email.trim(), password });
@@ -50,11 +55,11 @@ export default function SignInScreen() {
           </Text>
         </View>
 
-        {!isProductionBackend ? (
+        {canUseDemo ? (
           <View style={styles.demoCard}>
             <Text style={styles.demoTitle}>Reviewing the app?</Text>
             <Text style={styles.demoBody}>
-              Use demo@invite.app with any password, or open the full demo from the welcome screen.
+              Use demo@invite.app with any password, or open the local demo from the welcome screen.
             </Text>
             <Button
               fullWidth={false}
@@ -93,6 +98,11 @@ export default function SignInScreen() {
             </Text>
           ) : null}
           <Button label="Sign in" loading={state.busy} onPress={() => void submit()} />
+          {state.busy && isProductionBackend ? (
+            <Text accessibilityLiveRegion="polite" style={styles.busyHint}>
+              Signing in securely. A sleeping free-tier service can take a few seconds to wake.
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.footer}>
@@ -126,6 +136,7 @@ const styles = StyleSheet.create({
   demoBody: { ...typography.small, color: palette.inkMuted },
   form: { gap: spacing.lg },
   error: { ...typography.small, color: palette.error },
+  busyHint: { ...typography.small, color: palette.inkMuted, textAlign: 'center' },
   footer: { alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
   footerText: { ...typography.body, color: palette.inkMuted },
 });

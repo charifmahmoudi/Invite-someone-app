@@ -1,11 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { Button } from '@/components/ui/button';
 import { ScrollScreen } from '@/components/ui/screen';
 import { palette, radius, spacing, typography } from '@/constants/theme';
+import { warmMongoApi } from '@/data/mongodb-api';
 import { useApp } from '@/state/app-context';
 
 const benefits = [
@@ -16,7 +18,11 @@ const benefits = [
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { startDemo, state } = useApp();
+  const { canUseDemo, isProductionBackend, startDemo, state } = useApp();
+
+  useEffect(() => {
+    if (isProductionBackend) void warmMongoApi();
+  }, [isProductionBackend]);
 
   const openDemo = async () => {
     try {
@@ -72,12 +78,14 @@ export default function WelcomeScreen() {
           </View>
           <View style={styles.actions}>
             <Button label="Create your profile" onPress={() => router.push('/(auth)/sign-up')} />
-            <Button
-              label="Explore the demo"
-              loading={state.busy}
-              onPress={() => void openDemo()}
-              variant="outline"
-            />
+            {canUseDemo ? (
+              <Button
+                label="Explore the local demo"
+                loading={state.busy}
+                onPress={() => void openDemo()}
+                variant="outline"
+              />
+            ) : null}
             <Button
               fullWidth
               label="I already have an account"

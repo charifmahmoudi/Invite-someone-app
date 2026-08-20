@@ -20,3 +20,7 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: '*'
+      - key: GEOCODING_BASE_URL
+        value: https://nominatim.openstreetmap.org/
+      - key: GEOCODING_USER_AGENT
+        value: InviteSomeone/1.0 (+https://github.com/charifmahmoudi/Invite-someone-app)

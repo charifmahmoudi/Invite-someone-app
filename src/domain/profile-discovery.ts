@@ -15,11 +15,12 @@ export interface ProfileDiscoveryResult {
   sharedInterests: ActivityCategory[];
 }
 
-export interface ProfileMapPoint {
-  profile: Profile;
-  x: number;
-  y: number;
-}
+export type LocatedProfile = Profile & {
+  approximateLocation: NonNullable<Profile['approximateLocation']>;
+};
+
+/** MapLibre uses a flat west/south/east/north bounds tuple. */
+export type ApproximateMapBounds = [west: number, south: number, east: number, north: number];
 
 const EARTH_RADIUS_KM = 6371;
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
@@ -111,38 +112,38 @@ export const formatApproximateDistance = (distanceKm: number | undefined) => {
   return `About ${Math.round(distanceKm)} km away`;
 };
 
-/** Projects GeoJSON coordinates into a padded 0–1 map surface for the native privacy map. */
-export const projectProfilesForMap = (profiles: Profile[]): ProfileMapPoint[] => {
-  const locatedProfiles = profiles.filter(
-    (
-      profile,
-    ): profile is Profile & { approximateLocation: NonNullable<Profile['approximateLocation']> } =>
-      profile.approximateLocation !== undefined,
+export const profilesWithApproximateLocations = (profiles: Profile[]): LocatedProfile[] =>
+  profiles.filter(
+    (profile): profile is LocatedProfile => profile.approximateLocation !== undefined,
   );
-  if (locatedProfiles.length === 0) return [];
+
+/**
+ * Produces non-degenerate bounds for the real map. A single area is expanded to a
+ * neighbourhood-sized viewport; the coordinates still remain broad public centroids.
+ */
+export const approximateMapBounds = (profiles: Profile[]): ApproximateMapBounds | undefined => {
+  const locatedProfiles = profilesWithApproximateLocations(profiles);
+  if (locatedProfiles.length === 0) return undefined;
 
   const longitudes = locatedProfiles.map((profile) => profile.approximateLocation.coordinates[0]);
   const latitudes = locatedProfiles.map((profile) => profile.approximateLocation.coordinates[1]);
-  const longitudeMin = Math.min(...longitudes);
-  const longitudeSpan = Math.max(...longitudes) - longitudeMin;
-  const latitudeMin = Math.min(...latitudes);
-  const latitudeSpan = Math.max(...latitudes) - latitudeMin;
-  const padding = 0.12;
-  const usable = 1 - padding * 2;
+  let west = Math.min(...longitudes);
+  let east = Math.max(...longitudes);
+  let south = Math.min(...latitudes);
+  let north = Math.max(...latitudes);
 
-  return locatedProfiles.map((profile) => {
-    const [longitude, latitude] = profile.approximateLocation.coordinates;
-    return {
-      profile,
-      x:
-        longitudeSpan < 0.0001
-          ? 0.5
-          : padding + ((longitude - longitudeMin) / longitudeSpan) * usable,
-      // Native layouts grow downward, so north (larger latitude) maps toward zero.
-      y:
-        latitudeSpan < 0.0001
-          ? 0.5
-          : padding + (1 - (latitude - latitudeMin) / latitudeSpan) * usable,
-    };
-  });
+  // Roughly two kilometres at European latitudes; enough context without implying precision.
+  const minimumSpan = 0.025;
+  if (east - west < minimumSpan) {
+    const centre = (east + west) / 2;
+    west = centre - minimumSpan / 2;
+    east = centre + minimumSpan / 2;
+  }
+  if (north - south < minimumSpan) {
+    const centre = (north + south) / 2;
+    south = centre - minimumSpan / 2;
+    north = centre + minimumSpan / 2;
+  }
+
+  return [west, south, east, north];
 };

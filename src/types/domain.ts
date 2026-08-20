@@ -110,6 +110,8 @@ export interface SignUpInput {
   email: string;
   password: string;
   city: string;
+  headline: string;
+  bio: string;
   interests: ActivityCategory[];
   availability: string[];
   connectionGoals: string[];

@@ -7,6 +7,7 @@ import {
   createMongoActivity,
   createMongoInvitations,
   getMongoSession,
+  isLocalDemoEnabled,
   isMongoApiConfigured,
   joinMongoActivity,
   loadMongoData,
@@ -52,6 +53,7 @@ interface SignUpResult {
 interface AppContextValue {
   state: AppState;
   isProductionBackend: boolean;
+  canUseDemo: boolean;
   startDemo: () => Promise<void>;
   signIn: (input: SignInInput) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<SignUpResult>;
@@ -70,6 +72,13 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 const isRemoteBackendConfigured = isMongoApiConfigured || isSupabaseConfigured;
+const canUseLocalDemo = isLocalDemoEnabled && !isRemoteBackendConfigured;
+const createEmptyData = () => ({
+  profiles: [],
+  activities: [],
+  invitations: [],
+  savedActivityIds: [],
+});
 
 const friendlyError = (error: unknown) =>
   error instanceof Error ? error : new Error('Something went wrong. Please try again.');
@@ -85,6 +94,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (isMongoApiConfigured) {
           const remoteSession = await getMongoSession();
           if (remoteSession) {
+            // Preview 4 could persist the seeded review account. Preview 5 deliberately
+            // signs that account out once so an upgrade opens at real authentication.
+            if (remoteSession.userId === DEMO_USER_ID) {
+              await signOutMongo();
+              if (active) {
+                dispatch({ type: 'hydrate', data: createEmptyData(), session: null });
+              }
+              return;
+            }
             const data = await loadMongoData();
             if (active) {
               dispatch({
@@ -119,7 +137,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // The welcome screen remains available even if remote hydration fails.
       }
 
-      if (active) dispatch({ type: 'hydrate', data: createSeedData(), session: null });
+      if (active) {
+        dispatch({
+          type: 'hydrate',
+          data: isRemoteBackendConfigured ? createEmptyData() : createSeedData(),
+          session: null,
+        });
+      }
     };
 
     void hydrate();
@@ -165,6 +189,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const startDemo = useCallback(
     () =>
       run(async () => {
+        if (!canUseLocalDemo) {
+          throw new Error(
+            'Demo mode is disabled in connected builds. Sign in or create an account.',
+          );
+        }
         const data = createSeedData();
         dispatch({ type: 'start-session', session: { userId: DEMO_USER_ID, mode: 'demo' }, data });
       }),
@@ -179,7 +208,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             email: input.email.trim(),
             password: input.password,
           });
-          const data = await loadMongoData();
+          const data = remote.data ?? (await loadMongoData());
           dispatch({
             type: 'start-session',
             session: { userId: remote.userId, mode: 'mongodb' },
@@ -217,7 +246,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       run(async (): Promise<SignUpResult> => {
         if (isMongoApiConfigured) {
           const remote = await signUpMongo({ ...input, email: input.email.trim() });
-          const data = await loadMongoData();
+          const data = remote.data ?? (await loadMongoData());
           dispatch({
             type: 'start-session',
             session: { userId: remote.userId, mode: 'mongodb' },
@@ -230,6 +259,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const remote = await signUpRemote(input.email.trim(), input.password, {
             name: input.name,
             city: input.city,
+            headline: input.headline,
+            bio: input.bio,
             interests: input.interests,
             availability: input.availability,
             connectionGoals: input.connectionGoals,
@@ -258,8 +289,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           name: input.name.trim(),
           handle: handleFromName(input.name),
           email: input.email.trim().toLowerCase(),
-          headline: 'Ready for a few good plans',
-          bio: 'I joined Invite to meet kind people through small, comfortable activities.',
+          headline: input.headline.trim(),
+          bio: input.bio.trim(),
           city: input.city.trim(),
           initials: initialsFromName(input.name),
           avatarColor: '#315C4C',
@@ -429,6 +460,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => ({
       state,
       isProductionBackend: isRemoteBackendConfigured,
+      canUseDemo: canUseLocalDemo,
       startDemo,
       signIn,
       signUp,
