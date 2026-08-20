@@ -44,7 +44,7 @@ After creating the service:
 1. retrieve the service's shared outbound CIDR ranges and add only those ranges to the Atlas IP access list;
 2. wait for `/health` to return `{ "status": "ok" }`;
 3. verify the demo login and authenticated `/v1/data` response;
-4. set the GitHub Actions variable `INVITE_API_URL` to the service's public HTTPS URL, without a trailing slash;
+4. keep the workflow's live Render URL or set the GitHub Actions variable `INVITE_API_URL` to override it, without a trailing slash;
 5. rebuild the phone binaries because `EXPO_PUBLIC_API_URL` is embedded at build time.
 
 Render free services sleep after inactivity, so the first request after a quiet period can take longer. The mobile client uses a bounded request timeout and provides a retryable connection message.
@@ -61,7 +61,7 @@ EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
 
 ## Build connected phone binaries
 
-Set `EXPO_PUBLIC_API_URL` in the environment that runs Expo prebuild/EAS. For the repository’s GitHub Android workflow, create a repository Actions variable named `INVITE_API_URL`; for EAS, configure the corresponding build environment variable. A public API URL is not a secret, but it must point to a running server.
+Set `EXPO_PUBLIC_API_URL` in the environment that runs Expo prebuild/EAS. The repository's GitHub Android workflow defaults to `https://invite-someone-api.onrender.com`; a repository Actions variable named `INVITE_API_URL` can override it. For EAS, configure the corresponding build environment variable. A public API URL is not a secret, but it must point to a running server.
 
 Changing the URL requires a new binary. MongoDB credentials can be rotated or changed on the server without rebuilding the app.
 
