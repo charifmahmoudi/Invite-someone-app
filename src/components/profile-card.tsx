@@ -39,7 +39,8 @@ export function ProfileCard({
             {profile.isVerified ? <AppIcon name="shield" size={16} color={palette.forest} /> : null}
           </View>
           <Text numberOfLines={1} style={styles.location}>
-            {profile.city} · {profile.reliabilityScore}% reliable
+            {profile.approximateLocation?.area ?? profile.city} · {profile.reliabilityScore}%
+            reliable
           </Text>
         </View>
         {trailing ?? <AppIcon name="chevron-right" size={20} color={palette.inkMuted} />}
@@ -47,10 +48,17 @@ export function ProfileCard({
       <Text numberOfLines={2} style={styles.headline}>
         {profile.headline}
       </Text>
+      <Text numberOfLines={2} style={styles.bio}>
+        {profile.bio}
+      </Text>
       <View style={styles.pills}>
         {(reasons.length > 0 ? reasons : profile.interests.slice(0, 3)).map((reason) => (
           <Pill key={reason} label={reason} tone={reasons.length > 0 ? 'success' : 'neutral'} />
         ))}
+      </View>
+      <View style={styles.inviteHint}>
+        <AppIcon name="send" size={16} color={palette.primaryDark} />
+        <Text style={styles.inviteHintText}>View profile and invite</Text>
       </View>
     </PressableScale>
   );
@@ -73,5 +81,8 @@ const styles = StyleSheet.create({
   name: { ...typography.h3, color: palette.ink, flexShrink: 1 },
   location: { ...typography.small, color: palette.inkMuted },
   headline: { ...typography.body, color: palette.ink },
+  bio: { ...typography.small, color: palette.inkMuted },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  inviteHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  inviteHintText: { ...typography.label, color: palette.primaryDark },
 });

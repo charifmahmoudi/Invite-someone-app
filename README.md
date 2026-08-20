@@ -8,14 +8,15 @@ The same TypeScript codebase runs on iPhone, Android, and the web using Expo SDK
 
 - Guided account creation with interests, availability, and connection goals
 - Personalized activity feed with category filters and saved plans
-- People discovery based on transparent, non-sensitive matching signals
+- Photo-backed people discovery with biography, interest, availability, goal, trust, and distance filters
+- Privacy-first approximate-area map with no exact home pins or location permission
 - Complete host flow: create an activity, set capacity and visibility, and invite recommended people
 - Received and sent invitation inboxes with accept, decline, and cancel states
 - Community activities that members can join, with transactional capacity protection in production
 - Profile editing, attendance history, reliability signals, and hosted plans
 - First-meeting safety guidance embedded in invitation and activity flows
 - Smooth native navigation, press animations, haptics, responsive layouts, and accessible labels
-- Local demo mode plus a production-ready Supabase authentication and database path
+- Local demo mode plus a server-side MongoDB API with secure mobile sessions
 
 ## Quick start
 
@@ -51,7 +52,7 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 ## Installable builds
 
-Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.2` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
+Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.3` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission. Set the public repository Actions variable `INVITE_API_URL` before the build to connect that binary to a deployed MongoDB API.
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 
@@ -80,33 +81,37 @@ You can also use the local sign-in screen:
 
 Local account creation intentionally stores no password. It exists only to exercise onboarding in preview mode.
 
-## Connect the production backend
+## Connect MongoDB
 
-Invite switches automatically to Supabase when both public environment variables are present.
+Invite uses the MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the entire instance.
 
-1. Create a Supabase project.
-2. Apply [the initial migration](./supabase/migrations/20260815000000_initial_schema.sql) with `supabase db push` or the Supabase SQL editor.
-3. Copy `.env.example` to `.env`.
-4. Add the project URL and **publishable** key. Never put a service-role key in a mobile app.
-5. Restart Expo so public environment values are embedded in the bundle.
-6. In Supabase Auth URL settings, add the `invite://` scheme for email/OAuth redirects if those flows are enabled.
+1. Create a MongoDB Atlas deployment or a local replica set.
+2. Copy `server/.env.example` to `.env.server` and set `MONGODB_URI`, `MONGODB_DB_NAME`, and a strong `JWT_SECRET`. Development defaults point to `mongodb://127.0.0.1:27017` and production refuses the development JWT secret.
+3. Run `npm run server:seed` once for fictional demo members, then `npm run server:dev`.
+4. Deploy the API behind HTTPS and set `EXPO_PUBLIC_API_URL=https://your-api.example` in the mobile build environment.
+5. Restart/rebuild Expo because `EXPO_PUBLIC_*` values are embedded into the application bundle.
 
-The migration includes Row Level Security for profiles, relevant activities, invitations, attendees, and saved plans. Invitation acceptance and capacity checks run transactionally in Postgres.
+The API hashes passwords, rate-limits authentication, keeps bearer sessions in Android Keystore/iOS Keychain storage, removes member emails from public profile responses, protects every mutation with server authorization, uses a `2dsphere` index for coarse discovery, and performs invitation acceptance plus attendance in a MongoDB transaction. See [MongoDB backend setup](./docs/MONGODB_BACKEND.md).
+
+The previous Supabase adapter and migration remain available as a compatibility path when no MongoDB API URL is configured.
 
 ## Commands
 
-| Command              | Purpose                                           |
-| -------------------- | ------------------------------------------------- |
-| `npm start`          | Start Expo development server                     |
-| `npm run android`    | Open the Android target                           |
-| `npm run ios`        | Open the iOS target                               |
-| `npm run web`        | Open the web target                               |
-| `npm run typecheck`  | Run strict TypeScript checks                      |
-| `npm run lint`       | Run Expo's ESLint rules and React Compiler checks |
-| `npm test`           | Run the Jest user-story suite                     |
-| `npm run test:ci`    | Run tests with coverage in CI mode                |
-| `npm run export:web` | Produce a static web export                       |
-| `npm run format`     | Format source and documentation                   |
+| Command                | Purpose                                           |
+| ---------------------- | ------------------------------------------------- |
+| `npm start`            | Start Expo development server                     |
+| `npm run android`      | Open the Android target                           |
+| `npm run ios`          | Open the iOS target                               |
+| `npm run web`          | Open the web target                               |
+| `npm run typecheck`    | Run strict TypeScript checks                      |
+| `npm run lint`         | Run Expo's ESLint rules and React Compiler checks |
+| `npm test`             | Run the Jest user-story suite                     |
+| `npm run test:ci`      | Run tests with coverage in CI mode                |
+| `npm run export:web`   | Produce a static web export                       |
+| `npm run server:dev`   | Start the MongoDB API with file watching          |
+| `npm run server:start` | Start the MongoDB API                             |
+| `npm run server:seed`  | Seed an empty database with fictional demo data   |
+| `npm run format`       | Format source and documentation                   |
 
 ## Documentation
 

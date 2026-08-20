@@ -1,4 +1,4 @@
-import type { Activity, AppData, Invitation, Profile } from '@/types/domain';
+import type { Activity, AppData, Invitation, Profile } from '../types/domain';
 
 const nextDate = (daysFromNow: number, hour: number, minutes = 0) => {
   const date = new Date();
@@ -26,6 +26,8 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'AM',
     avatarColor: '#315C4C',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Alex-Morgan&size=256',
+    approximateLocation: { area: 'Kreuzberg', coordinates: [13.403, 52.4986] },
     interests: ['Coffee', 'Outdoors', 'Learning', 'Food'],
     availability: ['Weekday evenings', 'Saturday'],
     connectionGoals: ['New friends', 'Local community'],
@@ -43,6 +45,8 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'MC',
     avatarColor: '#A86678',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Maya-Chen&size=256',
+    approximateLocation: { area: 'Neukölln', coordinates: [13.435, 52.481] },
     interests: ['Arts', 'Food', 'Coffee', 'Outdoors'],
     availability: ['Weekday evenings', 'Sunday'],
     connectionGoals: ['New friends', 'Activity buddies'],
@@ -60,6 +64,8 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'JW',
     avatarColor: '#597B57',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Jonas-Weber&size=256',
+    approximateLocation: { area: 'Prenzlauer Berg', coordinates: [13.42, 52.54] },
     interests: ['Outdoors', 'Sports', 'Coffee', 'Wellness'],
     availability: ['Saturday', 'Sunday'],
     connectionGoals: ['Activity buddies', 'Local community'],
@@ -76,6 +82,8 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'SR',
     avatarColor: '#C66A45',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Sofia-Rossi&size=256',
+    approximateLocation: { area: 'Friedrichshain', coordinates: [13.455, 52.515] },
     interests: ['Food', 'Learning', 'Games', 'Arts'],
     availability: ['Weekday evenings', 'Sunday'],
     connectionGoals: ['New friends', 'Learn together'],
@@ -93,6 +101,8 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'NO',
     avatarColor: '#675D8C',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Nadia-Okafor&size=256',
+    approximateLocation: { area: 'Moabit', coordinates: [13.34, 52.53] },
     interests: ['Learning', 'Arts', 'Games', 'Coffee'],
     availability: ['Weekday evenings', 'Saturday'],
     connectionGoals: ['New friends', 'Learn together'],
@@ -109,6 +119,8 @@ export const seedProfiles: Profile[] = [
     city: 'Potsdam',
     initials: 'LA',
     avatarColor: '#3D7184',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Luis-Alvarez&size=256',
+    approximateLocation: { area: 'Potsdam centre', coordinates: [13.06, 52.39] },
     interests: ['Sports', 'Outdoors', 'Arts', 'Wellness'],
     availability: ['Weekday mornings', 'Sunday'],
     connectionGoals: ['Activity buddies', 'Local community'],
@@ -125,6 +137,8 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'EF',
     avatarColor: '#A67A36',
+    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Emma-Fischer&size=256',
+    approximateLocation: { area: 'Schöneberg', coordinates: [13.35, 52.49] },
     interests: ['Games', 'Learning', 'Food', 'Sports'],
     availability: ['Weekday evenings', 'Saturday'],
     connectionGoals: ['New friends', 'Learn together'],

@@ -42,6 +42,20 @@ describe('profile and activity validation', () => {
     expect(result.success).toBe(false);
   });
 
+  it('US-13 accepts only HTTPS profile photo URLs', () => {
+    const result = profileUpdateSchema.safeParse({
+      name: 'Taylor Reed',
+      avatarUrl: 'http://images.example.com/taylor.jpg',
+      headline: 'Coffee and gallery fan',
+      bio: 'I like relaxed plans, galleries, and thoughtful conversations over coffee.',
+      city: 'Berlin',
+      interests: ['Coffee', 'Arts'],
+      availability: ['Saturday'],
+      connectionGoals: ['New friends'],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('US-04 accepts a specific, future activity', () => {
     const future = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
     expect(

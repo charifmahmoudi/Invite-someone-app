@@ -41,24 +41,24 @@ Already brings people together and wants a lighter way to make gatherings more i
 
 ## MVP scope
 
-- Email account creation and sign-in through Supabase Auth
-- Member profile and editable preferences
-- People discovery and transparent recommendation reasons
+- Email account creation and sign-in through the MongoDB-backed API
+- Member profile, profile-photo URL, biography, and editable preferences
+- People discovery with transparent reasons, combined filters, and an approximate-area map
 - Community and invite-only activity creation
 - Capacity, time, place, category, and vibe selection
 - Personalized invitation creation and lifecycle
 - Received/sent invitation views
 - Community activity joining and saved activities
 - Demo data and local persistence for product evaluation
-- Row-level data authorization and database capacity constraints
+- Server-side authorization, geospatial index, and transactional capacity constraints
 
 ## Explicitly post-MVP
 
 - Push notification delivery and notification preferences
 - Chat or activity discussion threads
 - Blocking, reporting, moderation case management, and appeals UI
-- Profile and activity photo upload/moderation
-- Calendar sync, maps, and live location
+- Moderated profile/activity photo upload and transformation (the MVP supports HTTPS profile-photo URLs)
+- Calendar sync, full basemaps, routing, and live location (the MVP intentionally uses a coarse privacy map)
 - Repeat groups/communities and recurring activities
 - Attendance confirmation and a production reliability model
 - Localization and right-to-left layout verification

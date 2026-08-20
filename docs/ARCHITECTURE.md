@@ -10,9 +10,10 @@ flowchart TD
   Context --> Domain[Validation, matching, reducer]
   Context --> Mode{Backend configured?}
   Mode -->|No| Local[AsyncStorage + demo seed]
-  Mode -->|Yes| Client[Supabase client]
-  Client --> Auth[Supabase Auth]
-  Client --> DB[Postgres + RLS + triggers]
+  Mode -->|Mongo API| API[Express API + JWT]
+  API --> DB[MongoDB + indexes + transactions]
+  Mode -->|Legacy| Client[Supabase client]
+  Client --> Legacy[Auth + Postgres RLS]
 ```
 
 ## Technology choices
@@ -25,7 +26,8 @@ flowchart TD
 | State                  | React context + pure reducer                             | Small MVP surface, dependency-light, directly testable transitions             |
 | Local persistence      | AsyncStorage                                             | Fast demo/review loop without pretending to be secure authentication           |
 | Validation             | Zod                                                      | Shared runtime validation with useful user-facing messages                     |
-| Production backend     | Supabase Auth + Postgres                                 | Managed identity, relational integrity, transactions, Row Level Security       |
+| Production backend     | Express API + MongoDB Node driver                        | Server-only credentials, portable deployment, atomic updates and transactions  |
+| Session storage        | Expo SecureStore on Android/iOS                          | Keystore/Keychain protection for API bearer tokens                             |
 | Tests                  | Jest / jest-expo                                         | Expo-aligned unit tests with story traceability                                |
 | UI                     | Native primitives, Expo Symbols, LinearGradient, Haptics | Consistent native behavior with a small dependency surface                     |
 
@@ -33,13 +35,13 @@ flowchart TD
 
 ### Local preview mode
 
-When Supabase public variables are absent, the app loads a realistic seed snapshot. A user can open the complete demo or create a local preview profile. State changes are serialized to one versioned AsyncStorage key. Passwords are never persisted or validated in this mode.
+When no remote backend variable is present, the app loads a realistic seed snapshot. A user can open the complete demo or create a local preview profile. State changes are serialized to one versioned AsyncStorage key. Passwords are never persisted or validated in this mode.
 
 This mode is for product review, automated UI work, and offline development—not real accounts.
 
 ### Production backend mode
 
-When `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` exist, the app delegates sessions to Supabase Auth. After session resolution, it loads only rows authorized by RLS. Commands write remotely first and dispatch locally only after success, avoiding a false-success UI.
+When `EXPO_PUBLIC_API_URL` exists, the app authenticates against the Express API and stores the signed session token in Expo SecureStore on native devices. The API owns MongoDB credentials, returns only authorized data, and validates every mutation. Commands write remotely first and dispatch locally only after success, avoiding a false-success UI. The existing Supabase adapter is retained as a secondary compatibility mode when its two public values are configured and the Mongo API URL is absent.
 
 ## Command flow
 
@@ -47,9 +49,9 @@ For a representative invitation acceptance:
 
 1. The screen calls `respondToInvitation(invitationId, 'accepted')`.
 2. `AppProvider` validates that the invitation exists and sends the status update.
-3. Postgres verifies the receiver is authorized by RLS.
-4. An invitation trigger inserts the receiver into `activity_attendees` in the same transaction.
-5. A capacity trigger locks the activity row and rejects an overbooked join.
+3. JWT middleware authenticates the caller and the API verifies that the caller is the receiver.
+4. A MongoDB transaction atomically adds the receiver to the activity and marks the invitation accepted.
+5. The activity update uses a capacity expression so concurrent final-slot attempts cannot overbook.
 6. Only after database success does the reducer mark the invitation accepted and add the attendee locally.
 
 Local preview mode executes the same reducer transition without the remote steps.
@@ -67,13 +69,14 @@ src/
     profile/           Profile editing
   components/          Reusable product and UI primitives
   constants/           Design tokens
-  data/                Seed, persistence, Supabase adapter
+  data/                Seed, persistence, Mongo API and Supabase adapters
   domain/              Pure reducer, validation, matching
   state/               AppProvider and commands
   types/               Domain contracts
   utils/               Formatting and client ID helpers
   __tests__/           Story-mapped automated tests
 supabase/migrations/   Production schema, triggers, and policies
+server/src/            Express API, authentication, MongoDB access, seed command
 docs/                  Product and engineering decisions
 ```
 
@@ -99,7 +102,7 @@ Host, attendee, and already-invited profiles are excluded. This is a determinist
 - Corrupt local state falls back to seed data rather than blocking launch.
 - Remote mutations dispatch an error and leave the previous entity state intact.
 - The MVP does not queue production mutations offline. Adding an operation log requires conflict semantics per command; blind last-write-wins is not appropriate for invitations or capacity.
-- Supabase sessions persist in AsyncStorage through the official client. Authorization still lives in RLS, not in local route guards.
+- Mongo API tokens persist in encrypted platform storage. Authorization lives in API route checks and database filters, not in local route guards.
 
 ## Extension points
 

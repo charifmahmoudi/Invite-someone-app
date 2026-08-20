@@ -10,7 +10,7 @@ Every pull request runs four independent gates:
 4. A production static web export to catch bundling and route failures
 5. An Android native preview build on every pull request and `main` update
 
-The native workflow builds the Android release variant and fails unless `assets/index.android.bundle` is embedded in the APK. It then uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.2` prerelease for direct Android device testing. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
+The native workflow builds the Android release variant and fails unless `assets/index.android.bundle` is embedded in the APK. It then uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.3` prerelease for direct Android device testing. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
 
 Run the same checks locally:
 
@@ -31,13 +31,15 @@ npm run export:web -- --output-dir dist
 
 `matching.test.ts` verifies that explanations use the declared signals and that ineligible profiles are excluded. It also protects a relevant ranking example. This suite should grow alongside fairness and location changes.
 
+`profile-discovery.test.ts` verifies biography/area search, combined interests/availability/goals/verification/distance filters, approximate Haversine distance, and bounded map projection.
+
 ### User-story transitions
 
 `app-reducer.test.ts` exercises creation, invitations, acceptance, decline, public joining, duplicate prevention, and saving. Pure reducer tests are fast and deterministic; remote security is independently enforced by SQL.
 
 ## Required production-backend tests
 
-The repository can run without Supabase credentials, so CI does not execute destructive integration tests. Before production release, add an ephemeral Supabase job that verifies:
+The repository can run without MongoDB credentials, so CI does not execute destructive integration tests. Before production release, add an ephemeral MongoDB replica-set job that verifies:
 
 - unauthenticated reads fail;
 - one member cannot update another profile;
@@ -48,6 +50,11 @@ The repository can run without Supabase credentials, so CI does not execute dest
 - simultaneous final-slot joins produce one success and one capacity failure;
 - acceptance and attendee insertion roll back together when full;
 - saved activities are private to their owner.
+- public profile responses never contain another member's email or password hash;
+- malformed/expired JWTs fail and authentication rate limits activate;
+- coarse `$near` results respect the requested maximum distance.
+
+Run the same authorization suite against Supabase if that compatibility backend will remain enabled.
 
 ## Manual device matrix
 
@@ -71,7 +78,8 @@ Story IDs in [USER_STORIES.md](./USER_STORIES.md) map directly to test names. Wh
 
 - React Native Testing Library tests for critical form/error rendering
 - Maestro smoke flows on Android and iOS development builds
-- Supabase local integration suite in CI
+- Compatibility-backend integration suite if Supabase remains enabled
 - Accessibility tree assertions and screenshot contrast checks
 - Bundle-size and cold-start budgets
 - Performance profiling for long people/activity lists before pagination ships
+- MongoDB replica-set API integration tests and dependency/security scanning

@@ -26,6 +26,7 @@ export default function EditProfileScreen() {
   const profile = useCurrentProfile();
   const { updateProfile, state } = useApp();
   const [name, setName] = useState(profile?.name ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl ?? '');
   const [headline, setHeadline] = useState(profile?.headline ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [city, setCity] = useState(profile?.city ?? '');
@@ -40,6 +41,7 @@ export default function EditProfileScreen() {
   const submit = async () => {
     const result = profileUpdateSchema.safeParse({
       name,
+      avatarUrl: avatarUrl.trim() || undefined,
       headline,
       bio,
       city,
@@ -73,6 +75,7 @@ export default function EditProfileScreen() {
             profile={{
               ...profile,
               name,
+              avatarUrl: avatarUrl.trim() || undefined,
               initials: name
                 ? name
                     .split(/\s+/)
@@ -90,6 +93,16 @@ export default function EditProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About me</Text>
           <InputField label="Name" onChangeText={setName} value={name} />
+          <InputField
+            autoCapitalize="none"
+            autoCorrect={false}
+            hint="Use a direct HTTPS image link. Photo upload storage can be added before launch."
+            keyboardType="url"
+            label="Profile photo URL (optional)"
+            onChangeText={setAvatarUrl}
+            placeholder="https://example.com/my-photo.jpg"
+            value={avatarUrl}
+          />
           <InputField label="Headline" maxLength={80} onChangeText={setHeadline} value={headline} />
           <InputField label="Bio" maxLength={320} multiline onChangeText={setBio} value={bio} />
           <InputField label="City" onChangeText={setCity} value={city} />
