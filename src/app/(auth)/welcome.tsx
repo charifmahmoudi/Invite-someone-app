@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
 
   return (
     <ScrollScreen contentContainerStyle={styles.scroll}>
-      <View style={styles.page}>
+      <View style={styles.page} testID="welcome-screen">
         <LinearGradient
           colors={['#FBE2D9', '#E3ECE4', '#F7F6F1']}
           end={{ x: 1, y: 1 }}
@@ -82,6 +82,7 @@ export default function WelcomeScreen() {
               fullWidth
               label="I already have an account"
               onPress={() => router.push('/(auth)/sign-in')}
+              testID="welcome-sign-in"
               variant="ghost"
             />
           </View>
