@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, impl/architecture-v1-staging]
+  workflow_dispatch:
 
 permissions:
   contents: read
