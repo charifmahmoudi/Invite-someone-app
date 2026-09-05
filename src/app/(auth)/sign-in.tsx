@@ -41,7 +41,7 @@ export default function SignInScreen() {
   return (
     <ScrollScreen keyboardAware contentContainerStyle={styles.scroll}>
       <ScreenHeader onBack={() => router.back()} />
-      <View style={styles.content}>
+      <View style={styles.content} testID="auth-sign-in-screen">
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>WELCOME BACK</Text>
           <Text style={styles.title}>Your next good plan is waiting.</Text>
@@ -74,6 +74,7 @@ export default function SignInScreen() {
             onChangeText={setEmail}
             placeholder="you@example.com"
             returnKeyType="next"
+            testID="auth-email"
             value={email}
           />
           <InputField
@@ -85,14 +86,20 @@ export default function SignInScreen() {
             placeholder="Your password"
             returnKeyType="done"
             secureTextEntry
+            testID="auth-password"
             value={password}
           />
           {formError ? (
-            <Text accessibilityRole="alert" style={styles.error}>
+            <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
               {formError}
             </Text>
           ) : null}
-          <Button label="Sign in" loading={state.busy} onPress={() => void submit()} />
+          <Button
+            label="Sign in"
+            loading={state.busy}
+            onPress={() => void submit()}
+            testID="auth-submit"
+          />
         </View>
 
         <View style={styles.footer}>
