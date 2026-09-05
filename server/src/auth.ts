@@ -18,6 +18,11 @@ export interface AuthIdentity {
   emailVerified?: boolean;
 }
 
+export interface ResolvedAuthIdentity extends AuthIdentity {
+  email?: string;
+  emailVerified?: boolean;
+}
+
 const stringClaim = (payload: JWTPayload, names: string[]) => {
   for (const name of names) {
     const value = payload[name];
@@ -137,10 +142,14 @@ export const authenticatedUserId = (response: Response): string => response.loca
 export const authenticatedIdentity = (response: Response): AuthIdentity =>
   response.locals.identity as AuthIdentity;
 
-export const resolveClerkPrimaryEmail = async (identity: AuthIdentity) => {
-  if (identity.provider !== 'clerk') return identity.email;
-  if (identity.email) return identity.email;
-  if (!config.clerkSecretKey) return undefined;
+/**
+ * Clerk tokens do not need to carry profile/email claims. When a server-side
+ * Clerk key is configured, resolve the primary email from Clerk's backend API.
+ */
+export const resolveClerkIdentity = async (
+  identity: AuthIdentity,
+): Promise<ResolvedAuthIdentity> => {
+  if (identity.provider !== 'clerk' || identity.email || !config.clerkSecretKey) return identity;
 
   const result = await fetch(
     `https://api.clerk.com/v1/users/${encodeURIComponent(identity.subject)}`,
@@ -150,10 +159,19 @@ export const resolveClerkPrimaryEmail = async (identity: AuthIdentity) => {
 
   const user = (await result.json()) as {
     primary_email_address_id?: string | null;
-    email_addresses?: { id: string; email_address: string; verification?: { status?: string } }[];
+    email_addresses?: {
+      id: string;
+      email_address: string;
+      verification?: { status?: string };
+    }[];
   };
-  const primary = user.email_addresses?.find(
-    (address) => address.id === user.primary_email_address_id,
-  );
-  return primary?.email_address ?? user.email_addresses?.[0]?.email_address;
+  const primary =
+    user.email_addresses?.find((address) => address.id === user.primary_email_address_id) ??
+    user.email_addresses?.[0];
+  return {
+    ...identity,
+    email: primary?.email_address,
+    emailVerified:
+      identity.emailVerified ?? (primary?.verification?.status === 'verified' ? true : undefined),
+  };
 };
