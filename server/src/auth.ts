@@ -143,13 +143,16 @@ export const authenticatedIdentity = (response: Response): AuthIdentity =>
   response.locals.identity as AuthIdentity;
 
 /**
- * Clerk tokens do not need to carry profile/email claims. When a server-side
- * Clerk key is configured, resolve the primary email from Clerk's backend API.
+ * Clerk session tokens do not have to carry profile/email claims. Provisioning
+ * needs a positively verified primary email, so consult Clerk whenever the token
+ * itself does not already prove both the address and its verification state.
  */
 export const resolveClerkIdentity = async (
   identity: AuthIdentity,
 ): Promise<ResolvedAuthIdentity> => {
-  if (identity.provider !== 'clerk' || identity.email || !config.clerkSecretKey) return identity;
+  if (identity.provider !== 'clerk') return identity;
+  if (identity.email && identity.emailVerified === true) return identity;
+  if (!config.clerkSecretKey) return identity;
 
   const result = await fetch(
     `https://api.clerk.com/v1/users/${encodeURIComponent(identity.subject)}`,
@@ -170,8 +173,7 @@ export const resolveClerkIdentity = async (
     user.email_addresses?.[0];
   return {
     ...identity,
-    email: primary?.email_address,
-    emailVerified:
-      identity.emailVerified ?? (primary?.verification?.status === 'verified' ? true : undefined),
+    email: primary?.email_address ?? identity.email,
+    emailVerified: primary?.verification?.status === 'verified',
   };
 };
