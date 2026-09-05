@@ -98,10 +98,10 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
     });
     return;
   }
-  if (identity.emailVerified === false) {
+  if (identity.emailVerified !== true) {
     response.status(400).json({
       code: 'VERIFIED_EMAIL_REQUIRED',
-      message: 'Verify your email address before creating an Invite profile.',
+      message: 'A verified primary email is required before creating an Invite profile.',
     });
     return;
   }
@@ -164,7 +164,7 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
           provider: 'clerk',
           providerSubject: identity.subject,
           email,
-          emailVerified: identity.emailVerified,
+          emailVerified: true,
           createdAt: now,
           updatedAt: now,
         },
