@@ -29,6 +29,21 @@ interface ApiErrorBody {
   message?: string;
 }
 
+export interface ApiPage<T> {
+  items: T[];
+  nextCursor?: string;
+}
+
+export interface PeoplePageOptions {
+  cursor?: string;
+  limit?: number;
+  query?: string;
+  interests?: string[];
+  availability?: string;
+  connectionGoal?: string;
+  verifiedOnly?: boolean;
+}
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -98,6 +113,14 @@ const request = async <T>(
   }
 };
 
+const queryString = (values: Record<string, string | number | boolean | undefined>) => {
+  const search = Object.entries(values)
+    .filter((entry): entry is [string, string | number | boolean] => entry[1] !== undefined)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&');
+  return search ? `?${search}` : '';
+};
+
 export const getMongoSession = async (): Promise<{ userId: string } | null> => {
   const stored = await readSession();
   if (!stored) return null;
@@ -139,7 +162,39 @@ export const signUpMongo = async (input: SignUpInput) => {
 
 export const signOutMongo = removeSession;
 
+// Compatibility bootstrap used by the current AppProvider. New screens should
+// migrate toward the resource-oriented page helpers below.
 export const loadMongoData = () => request<AppData>('/v1/data');
+
+export const loadMongoMe = () => request<Profile>('/v1/me');
+
+export const loadMongoActivitiesPage = (cursor?: string, limit = 20) =>
+  request<ApiPage<Activity>>(`/v1/activities${queryString({ cursor, limit })}`);
+
+export const loadMongoPeoplePage = (options: PeoplePageOptions = {}) =>
+  request<ApiPage<Profile>>(
+    `/v1/people${queryString({
+      cursor: options.cursor,
+      limit: options.limit ?? 20,
+      query: options.query,
+      interests: options.interests?.join(','),
+      availability: options.availability,
+      connectionGoal: options.connectionGoal,
+      verifiedOnly: options.verifiedOnly,
+    })}`,
+  );
+
+export const loadMongoInvitationsPage = (
+  direction?: 'sent' | 'received',
+  cursor?: string,
+  limit = 20,
+) =>
+  request<ApiPage<Invitation>>(
+    `/v1/invitations${queryString({ direction, cursor, limit })}`,
+  );
+
+export const loadMongoSavedPage = (cursor?: string, limit = 20) =>
+  request<ApiPage<string>>(`/v1/saved${queryString({ cursor, limit })}`);
 
 export const updateMongoProfile = (profile: Profile) =>
   request<Profile>('/v1/profile', {
