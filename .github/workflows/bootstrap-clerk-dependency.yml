@@ -25,6 +25,9 @@ jobs:
           node-version: 22.13.0
           cache: npm
 
+      - name: Install locked dependencies
+        run: npm ci
+
       - name: Install Clerk Expo browser dependencies
         run: npx expo install expo-auth-session expo-crypto expo-web-browser
 
