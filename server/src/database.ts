@@ -12,8 +12,8 @@ export interface MemberDocument extends Document {
   _id: string;
   email: string;
   emailNormalized: string;
-  /** Present only for the temporary internal-auth compatibility path. */
-  passwordHash?: string;
+  /** Internal-auth compatibility credential. Clerk-provisioned users receive an unusable random hash. */
+  passwordHash: string;
   profile: Omit<Profile, 'email'>;
   mapPoint?: GeoPoint;
   createdAt: string;
