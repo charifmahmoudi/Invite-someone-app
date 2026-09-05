@@ -37,6 +37,21 @@ const ManagedAuthContext = createContext<ManagedAuthValue>(unmanagedAuth);
 
 export const useManagedAuth = () => useContext(ManagedAuthContext);
 
+function ClerkApiTokenInstaller() {
+  const { getToken, isLoaded } = useAuth({ treatPendingAsSignedOut: false });
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    setMongoApiTokenProvider(() => getToken());
+    return () => {
+      setMongoApiTokenProvider(undefined);
+    };
+  }, [getToken, isLoaded]);
+
+  return null;
+}
+
 function InviteSessionLogoutMirror() {
   const { state } = useApp();
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
@@ -59,26 +74,9 @@ function InviteSessionLogoutMirror() {
 }
 
 function ClerkMongoBridge({ children }: { children: React.ReactNode }) {
-  const { getToken, isLoaded, isSignedIn, sessionId } = useAuth({
-    treatPendingAsSignedOut: false,
-  });
-  const getTokenRef = useRef(getToken);
-  const [installedSessionKey, setInstalledSessionKey] = useState<string>();
+  const { isLoaded, isSignedIn, sessionId } = useAuth({ treatPendingAsSignedOut: false });
   const [inviteRevision, setInviteRevision] = useState(0);
   const sessionKey = sessionId ?? 'signed-out';
-
-  getTokenRef.current = getToken;
-
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    setMongoApiTokenProvider(() => getTokenRef.current());
-    setInstalledSessionKey(sessionKey);
-
-    return () => {
-      setMongoApiTokenProvider(undefined);
-    };
-  }, [isLoaded, sessionKey]);
 
   const refreshInviteSession = useCallback(() => {
     setInviteRevision((current) => current + 1);
@@ -94,7 +92,7 @@ function ClerkMongoBridge({ children }: { children: React.ReactNode }) {
     [isLoaded, isSignedIn, refreshInviteSession],
   );
 
-  if (!isLoaded || installedSessionKey !== sessionKey) {
+  if (!isLoaded) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={palette.primary} />
@@ -104,6 +102,7 @@ function ClerkMongoBridge({ children }: { children: React.ReactNode }) {
 
   return (
     <ManagedAuthContext.Provider value={managedAuth}>
+      <ClerkApiTokenInstaller />
       <AppProvider key={`${sessionKey}:${inviteRevision}`}>
         <InviteSessionLogoutMirror />
         {children}
