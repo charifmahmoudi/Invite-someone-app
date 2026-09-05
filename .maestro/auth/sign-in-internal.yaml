@@ -1,0 +1,22 @@
+appId: com.charifmahmoudi.invite
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- tapOn:
+    id: welcome-sign-in
+- assertVisible:
+    id: auth-sign-in-screen
+- tapOn:
+    id: auth-email
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible: Plans
+    timeout: 60000
