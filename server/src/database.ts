@@ -12,7 +12,8 @@ export interface MemberDocument extends Document {
   _id: string;
   email: string;
   emailNormalized: string;
-  passwordHash: string;
+  /** Present only for the temporary internal-auth compatibility path. */
+  passwordHash?: string;
   profile: Omit<Profile, 'email'>;
   mapPoint?: GeoPoint;
   createdAt: string;
