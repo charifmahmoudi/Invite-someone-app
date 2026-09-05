@@ -6,6 +6,7 @@ import { createApp } from './app';
 import { requireAuthentication } from './auth';
 import { config } from './config';
 import { closeDatabase } from './database';
+import { identityRouter } from './identity-router';
 import { resourceRouter } from './resource-router';
 
 const resourceReadPaths = new Set(['/me', '/activities', '/people', '/invitations', '/saved']);
@@ -15,6 +16,11 @@ const start = () => {
   app.disable('x-powered-by');
   app.use(helmet());
   app.use(cors({ origin: config.corsOrigins }));
+  app.use(express.json({ limit: '256kb' }));
+
+  // Clerk provisioning lives beside, not inside, the compatibility password API.
+  // /login and /register simply fall through when they do not match this router.
+  app.use('/v1/auth', identityRouter);
 
   // New resource-oriented reads live ahead of the compatibility app. Only these
   // GET routes require auth here; /v1/auth/login and /v1/auth/register must stay
