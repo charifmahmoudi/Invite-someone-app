@@ -3,9 +3,15 @@ import { randomUUID } from 'node:crypto';
 import { hash } from 'bcryptjs';
 
 import { seedActivities, seedInvitations, seedProfiles } from '../../src/data/seed';
-import { closeDatabase, getCollections, type MemberDocument } from './database';
+import {
+  closeDatabase,
+  ensureDatabaseIndexes,
+  getCollections,
+  type MemberDocument,
+} from './database';
 
 const seed = async () => {
+  await ensureDatabaseIndexes();
   const { members, activities, invitations, savedActivities } = await getCollections();
   const counts = await Promise.all([
     members.countDocuments(),
