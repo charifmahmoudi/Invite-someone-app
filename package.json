@@ -72,6 +72,7 @@
     "test:ci": "jest --ci --coverage --runInBand",
     "server:dev": "tsx watch server/src/index.ts",
     "server:start": "tsx server/src/index.ts",
+    "server:indexes": "tsx server/src/indexes.ts",
     "server:seed": "tsx server/src/seed.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
