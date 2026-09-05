@@ -1,9 +1,8 @@
 import { createApp } from './app';
 import { config } from './config';
-import { closeDatabase, getDatabase } from './database';
+import { closeDatabase } from './database';
 
-const start = async () => {
-  await getDatabase();
+const start = () => {
   const server = createApp().listen(config.port, () => {
     console.log(`Invite API listening on port ${config.port}.`);
   });
@@ -18,7 +17,9 @@ const start = async () => {
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 };
 
-start().catch((error: unknown) => {
+try {
+  start();
+} catch (error: unknown) {
   console.error('Invite API failed to start.', error);
   process.exitCode = 1;
-});
+}
