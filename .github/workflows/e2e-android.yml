@@ -1,0 +1,96 @@
+name: Android E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Public URL of an isolated Invite E2E API. Leave blank to use INVITE_E2E_API_URL.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Internal-auth compatibility smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      EXPO_PUBLIC_API_URL: ${{ inputs.api_url || vars.INVITE_E2E_API_URL }}
+      E2E_EMAIL: demo@invite.app
+      E2E_PASSWORD: invite-demo
+
+    steps:
+      - name: Require isolated E2E API
+        run: |
+          if [ -z "$EXPO_PUBLIC_API_URL" ]; then
+            echo "Set workflow input api_url or repository variable INVITE_E2E_API_URL."
+            exit 1
+          fi
+          if [ "$EXPO_PUBLIC_API_URL" = "https://invite-someone-api.onrender.com" ]; then
+            echo "Refusing to run E2E against the production/demo Render API."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: '1'
+
+      - name: Build E2E APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Install Maestro
+        run: curl -Ls "https://get.maestro.mobile.dev" | bash
+
+      - name: Run emulator smoke flow
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            "$HOME/.maestro/bin/maestro" test \
+              -e E2E_EMAIL="$E2E_EMAIL" \
+              -e E2E_PASSWORD="$E2E_PASSWORD" \
+              .maestro/auth/sign-in-internal.yaml
+
+      - name: Upload Maestro evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-android-e2e-${{ github.run_id }}
+          path: ~/.maestro/tests
+          if-no-files-found: ignore
+          retention-days: 14
