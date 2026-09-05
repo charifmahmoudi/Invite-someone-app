@@ -1,18 +1,49 @@
-# Testing strategy
+# Testing strategy and CI/E2E architecture
 
-## Quality gates
+## Purpose
 
-Every pull request runs four independent gates:
+Invite uses multiple test layers because no single layer can prove product behavior, server authorization, database concurrency and native usability at once.
 
-1. Strict TypeScript compilation
-2. ESLint, including React Hooks purity/compiler rules
-3. Jest story tests with coverage
-4. A production static web export to catch bundling and route failures
-5. An Android native preview build on every pull request and `main` update
+The intended hierarchy is:
 
-The native workflow builds the Android release variant and fails unless `assets/index.android.bundle` is embedded in the APK. It then uploads the APK and SHA-256 checksum as GitHub Actions artifacts. Updates to `main` also publish them to the `v1.0.0-preview.4` prerelease for direct Android device testing. Preview 4 is compiled with the live Render API URL unless `INVITE_API_URL` overrides it. The preview is development-signed; Play Store and iPhone releases require their platform signing credentials.
+```text
+                 few, high-value
+             ┌────────────────────┐
+             │ Device E2E         │
+             │ Maestro + emulator │
+             ├────────────────────┤
+             │ API integration    │
+             │ auth + Mongo       │
+             ├────────────────────┤
+             │ Component tests    │
+             │ critical UI states │
+             ├────────────────────┤
+             │ Domain/unit tests  │
+             │ reducer/validation │
+             ├────────────────────┤
+             │ Static/build gates │
+             │ TS/lint/export     │
+             └────────────────────┘
+                 many, very fast
+```
 
-Run the same checks locally:
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the application trust boundaries.
+
+## Current CI gates
+
+The `CI` workflow runs:
+
+1. `npm ci`;
+2. strict application and server TypeScript compilation;
+3. ESLint;
+4. Jest domain/user-story tests with configured coverage;
+5. a production Expo web export.
+
+The workflow runs on `main`, pull requests, the temporary architecture staging branch while this migration is being verified, and may also be started manually.
+
+The mobile preview workflow independently builds the Android release variant, verifies that the embedded JavaScript bundle exists, uploads the APK/checksum, and publishes the development-signed preview from `main`.
+
+Run the fast gates locally with:
 
 ```bash
 npm run typecheck
@@ -21,65 +52,280 @@ npm run test:ci
 npm run export:web -- --output-dir dist
 ```
 
-## Automated test layers
+## Existing automated tests
 
-### Runtime validation
+### Validation
 
-`validation.test.ts` covers registration, profile completeness, activity copy, time, and group limits. These tests protect inputs at the boundary before state or remote writes.
+`validation.test.ts` protects registration/profile/activity validation at the client/domain boundary.
 
-### Recommendation behavior
+### Matching and discovery
 
-`matching.test.ts` verifies that explanations use the declared signals and that ineligible profiles are excluded. It also protects a relevant ranking example. This suite should grow alongside fairness and location changes.
+`matching.test.ts` verifies declared matching signals, eligibility rules and explanations.
 
-`profile-discovery.test.ts` verifies biography/area search, combined interests/availability/goals/verification/distance filters, approximate Haversine distance, and bounded map projection.
+`profile-discovery.test.ts` verifies text/area discovery, combined filters, approximate distance calculations and bounded map projection.
 
-### User-story transitions
+### State transitions
 
-`app-reducer.test.ts` exercises creation, invitations, acceptance, decline, public joining, duplicate prevention, and saving. Pure reducer tests are fast and deterministic; remote security is independently enforced by SQL.
+`app-reducer.test.ts` covers activity creation, invitations, acceptance, decline, public joining, duplicate prevention and saved activities.
 
-## Required production-backend tests
+These tests are fast and deterministic, but they do **not** prove API authorization or MongoDB concurrency behavior.
 
-The repository can run without MongoDB credentials, so CI does not execute destructive integration tests. Before production release, add an ephemeral MongoDB replica-set job that verifies:
+## API integration layer
 
-- unauthenticated reads fail;
-- one member cannot update another profile;
+Before a public production release, CI should run the server against an isolated MongoDB environment that supports transactions. Required scenarios include:
+
+- unauthenticated protected requests fail;
+- malformed, expired, wrong-issuer and wrong-audience identity tokens fail;
+- a member cannot update another profile;
 - invite-only activities are hidden from unrelated members;
-- only a host can create invitations for an activity;
-- a receiver can accept/decline but cannot cancel as sender;
-- a sender can cancel but cannot accept for the receiver;
+- only a host can send invitations for an activity;
+- receiver/sender permissions are enforced for invitation responses;
 - simultaneous final-slot joins produce one success and one capacity failure;
-- acceptance and attendee insertion roll back together when full;
-- saved activities are private to their owner.
-- public profile responses never contain another member's email or password hash;
-- malformed/expired JWTs fail and authentication rate limits activate;
-- coarse `$near` results respect the requested maximum distance.
+- invitation acceptance and attendee insertion roll back together;
+- saved activities are private;
+- public profiles do not leak other members' email/auth fields;
+- geospatial queries respect their maximum distance;
+- Clerk provider subjects resolve to the correct internal Invite user;
+- one external identity cannot silently become another Invite user.
 
-Run the same authorization suite against Supabase if that compatibility backend will remain enabled.
+This integration suite is still to be implemented. It requires an isolated MongoDB transaction-capable test environment.
 
-## Manual device matrix
+## Device E2E architecture
 
-At minimum, validate:
+The target CI environment is:
 
-| Platform | Target                    | Focus                                                 |
-| -------- | ------------------------- | ----------------------------------------------------- |
-| iOS      | Small supported iPhone    | Text wrapping, keyboard, modal date picker            |
-| iOS      | Current large iPhone      | Safe areas, tab reachability, haptics                 |
-| Android  | Compact API 36 device     | Predictive back, keyboard resize, Material symbols    |
-| Android  | Large API 36 device       | Responsive max width, date/time picker                |
-| Web      | Current Chrome and Safari | Static routing, keyboard navigation, focus visibility |
+```text
+GitHub Actions
+      |
+      v
+Android emulator
+      |
+      v
+Invite E2E APK
+      |
+      +------> Clerk development/test instance
+      |
+      v
+Invite E2E API
+      |
+      v
+MongoDB E2E database
+```
 
-Repeat with larger system text, dark system settings (the MVP intentionally stays light), reduced motion, VoiceOver/TalkBack, and poor network conditions.
+The production API/database must never be the default E2E target.
 
-## Acceptance evidence
+### Implemented emulator foundation
 
-Story IDs in [USER_STORIES.md](./USER_STORIES.md) map directly to test names. When a story changes, update its criteria and tests in the same pull request. A passing unit test is not evidence that a screen is usable: the manual checklist remains required for release candidates.
+The repository now contains:
 
-## Future automation
+```text
+.maestro/auth/sign-in-internal.yaml
+.github/workflows/e2e-android.yml
+```
 
-- React Native Testing Library tests for critical form/error rendering
-- Maestro smoke flows on Android and iOS development builds
-- Compatibility-backend integration suite if Supabase remains enabled
-- Accessibility tree assertions and screenshot contrast checks
-- Bundle-size and cold-start budgets
-- Performance profiling for long people/activity lists before pagination ships
-- MongoDB replica-set API integration tests and dependency/security scanning
+The manual Android workflow:
+
+- requires an explicit workflow `api_url` or repository variable `INVITE_E2E_API_URL`;
+- refuses the known Render production/demo API URL;
+- builds a release APK with that E2E API URL embedded;
+- boots an Android emulator;
+- installs the APK;
+- runs the Maestro sign-in smoke flow;
+- uploads available Maestro evidence.
+
+Until Clerk project configuration is provided, this compatibility smoke uses the seeded internal test account:
+
+```text
+demo@invite.app
+invite-demo
+```
+
+This is transitional. The workflow is manual-only so an unprovisioned E2E environment cannot break ordinary CI.
+
+## Target Clerk E2E authentication
+
+Once the Expo client is switched to Clerk, automated device tests should use Clerk development/test identities rather than Google or Apple provider UI.
+
+Recommended identities:
+
+```text
+e2e-host+clerk_test@example.com
+e2e-guest+clerk_test@example.com
+e2e-third+clerk_test@example.com
+```
+
+Clerk development/test mode provides deterministic test verification code:
+
+```text
+424242
+```
+
+The emulator should type the email and verification code into the real application authentication UI. Clerk then issues a normal development session/token, and the Invite API verifies that token through its normal Clerk/JWKS boundary.
+
+**Do not add an Invite `E2E_BYPASS_AUTH` code path.** `424242` belongs to Clerk's test environment; it must never become a magic code implemented in Invite.
+
+### Why routine CI should not automate Google/Apple login
+
+Provider UI is brittle under automation because it may introduce:
+
+- consent screen changes;
+- CAPTCHA/bot detection;
+- suspicious-login challenges;
+- MFA/device verification;
+- provider-specific rate limits.
+
+Use Clerk email-code test identities for routine CI. Test Google/Apple provider configuration separately as targeted release smoke checks.
+
+## E2E personas and data
+
+Maintain a small deterministic set of ordinary members:
+
+```text
+HOST
+  e2e-host+clerk_test@example.com
+  Berlin
+  coffee, hiking
+
+GUEST
+  e2e-guest+clerk_test@example.com
+  Berlin
+  coffee, photography
+
+THIRD
+  e2e-third+clerk_test@example.com
+  Potsdam
+  cycling
+```
+
+They are normal members, not privileged administrators.
+
+Routine test runs should preserve stable authentication identities but reset/reseed the isolated application scenario:
+
+```text
+preserve:
+  Clerk test identities
+  stable Invite identity mappings if desired
+
+reset/reseed:
+  profiles to fixture values
+  activities
+  invitations
+  saved activities
+  future attendance/reputation records
+```
+
+Never run a destructive reset against production.
+
+## Stable UI selectors
+
+Critical E2E controls use React Native `testID`s rather than depending only on mutable copy.
+
+Implemented selectors include:
+
+```text
+welcome-screen
+welcome-sign-in
+auth-sign-in-screen
+auth-email
+auth-password
+auth-submit
+auth-error
+```
+
+When Clerk OTP UI is introduced, add:
+
+```text
+auth-code
+auth-verify
+```
+
+Use human-visible copy for assertions only when the copy itself is part of the behavior under test.
+
+## High-value E2E journeys
+
+After the isolated Clerk/Mongo E2E environment exists, prioritize these flows:
+
+1. email-code sign-in and session restoration;
+2. host creates a community activity;
+3. host discovers a guest and sends an invitation;
+4. guest signs in and accepts the invitation;
+5. accepted guest appears as an attendee;
+6. final-slot capacity cannot be overbooked;
+7. invite-only activity stays invisible to unrelated third user;
+8. save/unsave persists;
+9. profile edits persist;
+10. unauthorized actions are unavailable in UI and rejected by API.
+
+A representative multi-user scenario is:
+
+```text
+reset E2E fixture
+  -> sign in HOST
+  -> create activity
+  -> invite GUEST
+  -> sign out
+  -> sign in GUEST
+  -> accept invitation
+  -> assert attendee state
+```
+
+That one journey exercises native UI, authentication, API authorization, MongoDB transactions and client refresh behavior.
+
+## Secrets and public configuration
+
+| Value | Secret? | Location |
+| --- | --- | --- |
+| E2E API URL | no | workflow input/repository variable |
+| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | no, public by design | E2E app build |
+| Clerk server secret | yes | E2E/production server or trusted CI only |
+| E2E MongoDB URI | yes | E2E server/trusted CI only |
+| production MongoDB URI | yes | production server only |
+
+Never expose server credentials through an `EXPO_PUBLIC_*` variable.
+
+Privileged workflows must not execute untrusted fork code with repository secrets.
+
+## Cold-start behavior
+
+Free/scale-to-zero hosting can introduce a slow first request. Read paths may use bounded timeout/retry behavior, and E2E waits may allow a cold-start window.
+
+Do not blindly retry writes such as activity creation or invitation acceptance until those operations have explicit idempotency guarantees.
+
+The current sign-in smoke allows up to 60 seconds for the authenticated Plans tab to become visible so an isolated free-tier API can wake without masking a permanent failure.
+
+## Failure evidence
+
+Device jobs should retain enough evidence to debug failures:
+
+- Maestro test output/artifacts;
+- screenshots generated by Maestro;
+- commit/build identifier;
+- target environment identifier;
+- API correlation IDs once request logging is implemented.
+
+Do not print bearer tokens, Clerk secret keys, MongoDB URIs or reset credentials to logs.
+
+## Manual release matrix
+
+Automated E2E does not replace release-device testing.
+
+| Platform | Target | Focus |
+| --- | --- | --- |
+| iOS | small supported iPhone | keyboard, wrapping, date picker, Apple login |
+| iOS | large current iPhone | safe areas, haptics, session restoration |
+| Android | compact supported device | predictive back, keyboard, native auth |
+| Android | large device | responsive layout, date/time picker |
+| Web | Chrome and Safari | static routing, keyboard/focus, browser auth callback |
+
+Repeat important flows with larger system text, reduced motion, VoiceOver/TalkBack and poor network conditions.
+
+## Implementation sequence
+
+1. **Implemented:** fast CI static/domain/build gates.
+2. **Implemented:** stable selectors for the current sign-in flow.
+3. **Implemented:** manual Android emulator + Maestro compatibility smoke.
+4. **Next:** provision isolated E2E API and MongoDB environment.
+5. **Next:** configure Clerk development instance and Expo Clerk client.
+6. **Next:** replace password smoke with Clerk test email + `424242` flow.
+7. **Next:** implement MongoDB-backed API integration tests.
+8. **Then:** add multi-user activity/invitation E2E journeys and make the reliable subset a required release gate.
