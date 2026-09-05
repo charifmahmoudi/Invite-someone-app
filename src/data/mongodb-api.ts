@@ -44,6 +44,32 @@ export interface PeoplePageOptions {
   verifiedOnly?: boolean;
 }
 
+export type ApiTokenProvider = () => Promise<string | null>;
+
+export interface IdentityProvisionInput {
+  name: string;
+  city: string;
+  interests: SignUpInput['interests'];
+  availability: SignUpInput['availability'];
+  connectionGoals: SignUpInput['connectionGoals'];
+}
+
+export interface IdentityProvisionResult {
+  created: boolean;
+  userId: string;
+  profile: Profile;
+}
+
+let externalTokenProvider: ApiTokenProvider | undefined;
+
+/**
+ * Installs the token source used by a managed identity SDK such as Clerk.
+ * Passing undefined restores the internal Invite-session compatibility path.
+ */
+export const setMongoApiTokenProvider = (provider?: ApiTokenProvider) => {
+  externalTokenProvider = provider;
+};
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -72,13 +98,18 @@ const readSession = async (): Promise<StoredApiSession | null> => {
   }
 };
 
+const readBearerToken = async () => {
+  if (externalTokenProvider) return externalTokenProvider();
+  return (await readSession())?.token ?? null;
+};
+
 const request = async <T>(
   path: string,
   options: RequestInit = {},
   authenticated = true,
 ): Promise<T> => {
   if (!configuredApiUrl) throw new Error('The Invite API is not configured.');
-  const session = authenticated ? await readSession() : null;
+  const token = authenticated ? await readBearerToken() : null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
@@ -89,7 +120,7 @@ const request = async <T>(
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
     });
@@ -122,12 +153,12 @@ const queryString = (values: Record<string, string | number | boolean | undefine
 };
 
 export const getMongoSession = async (): Promise<{ userId: string } | null> => {
-  const stored = await readSession();
-  if (!stored) return null;
+  const token = await readBearerToken();
+  if (!token) return null;
   try {
     return await request<{ userId: string }>('/v1/session');
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    if (!externalTokenProvider && error instanceof ApiError && error.status === 401) {
       await removeSession();
       return null;
     }
@@ -161,6 +192,12 @@ export const signUpMongo = async (input: SignUpInput) => {
 };
 
 export const signOutMongo = removeSession;
+
+export const provisionMongoIdentity = (input: IdentityProvisionInput) =>
+  request<IdentityProvisionResult>('/v1/auth/provision', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 
 // Compatibility bootstrap used by the current AppProvider. New screens should
 // migrate toward the resource-oriented page helpers below.
