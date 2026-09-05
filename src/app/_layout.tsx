@@ -3,14 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { InviteAuthProvider } from '@/auth/clerk-provider';
 import { palette } from '@/constants/theme';
-import { AppProvider } from '@/state/app-context';
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: palette.canvas }}>
       <SafeAreaProvider>
-        <AppProvider>
+        <InviteAuthProvider>
           <StatusBar style="dark" />
           <Stack
             screenOptions={{
@@ -31,7 +31,7 @@ export default function RootLayout() {
               options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
             />
           </Stack>
-        </AppProvider>
+        </InviteAuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
