@@ -8,16 +8,29 @@ import { config } from './config';
 import { closeDatabase } from './database';
 import { resourceRouter } from './resource-router';
 
+const resourceReadPaths = new Set(['/me', '/activities', '/people', '/invitations', '/saved']);
+
 const start = () => {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
   app.use(cors({ origin: config.corsOrigins }));
 
-  // New resource-oriented reads live ahead of the compatibility app. Unmatched
-  // routes fall through to the existing API so current mobile binaries continue
-  // to work while clients migrate away from the broad /v1/data bootstrap.
-  app.use('/v1', requireAuthentication, resourceRouter);
+  // New resource-oriented reads live ahead of the compatibility app. Only these
+  // GET routes require auth here; /v1/auth/login and /v1/auth/register must stay
+  // public so current binaries can still establish a session.
+  app.use(
+    '/v1',
+    (request, response, next) => {
+      if (request.method !== 'GET' || !resourceReadPaths.has(request.path)) {
+        next();
+        return;
+      }
+      void requireAuthentication(request, response, next);
+    },
+    resourceRouter,
+  );
+
   app.use(createApp());
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
