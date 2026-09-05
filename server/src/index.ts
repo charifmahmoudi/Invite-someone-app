@@ -26,7 +26,7 @@ const start = () => {
         next();
         return;
       }
-      void requireAuthentication(request, response, next);
+      return requireAuthentication(request, response, next);
     },
     resourceRouter,
   );
