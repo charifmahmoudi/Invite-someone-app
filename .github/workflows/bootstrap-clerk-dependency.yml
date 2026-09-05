@@ -1,0 +1,41 @@
+name: Bootstrap Clerk dependency
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bootstrap-clerk-dependency.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Install Clerk Expo SDK
+        run: npm install @clerk/expo@4.6.5 --save-exact
+
+      - name: Commit dependency lockfile
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo 'Clerk dependency already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m 'build: add Clerk Expo SDK'
+          git push origin HEAD:main
