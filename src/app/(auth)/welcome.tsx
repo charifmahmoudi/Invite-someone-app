@@ -1,7 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
+import { isClerkConfigured, useManagedAuth } from '@/auth/clerk-provider';
 import { AppIcon } from '@/components/ui/app-icon';
 import { Button } from '@/components/ui/button';
 import { ScrollScreen } from '@/components/ui/screen';
@@ -17,6 +19,18 @@ const benefits = [
 export default function WelcomeScreen() {
   const router = useRouter();
   const { startDemo, state } = useApp();
+  const managedAuth = useManagedAuth();
+
+  useEffect(() => {
+    if (
+      managedAuth.enabled &&
+      managedAuth.identityLoaded &&
+      managedAuth.identitySignedIn &&
+      !state.session
+    ) {
+      router.replace('/(auth)/sign-up');
+    }
+  }, [managedAuth.enabled, managedAuth.identityLoaded, managedAuth.identitySignedIn, router, state.session]);
 
   const openDemo = async () => {
     try {
@@ -28,6 +42,10 @@ export default function WelcomeScreen() {
         error instanceof Error ? error.message : 'Please try again.',
       );
     }
+  };
+
+  const startProfile = () => {
+    router.push(isClerkConfigured ? '/(auth)/sign-in' : '/(auth)/sign-up');
   };
 
   return (
@@ -71,7 +89,7 @@ export default function WelcomeScreen() {
             ))}
           </View>
           <View style={styles.actions}>
-            <Button label="Create your profile" onPress={() => router.push('/(auth)/sign-up')} />
+            <Button label="Create your profile" onPress={startProfile} />
             <Button
               label="Explore the demo"
               loading={state.busy}
