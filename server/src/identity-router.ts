@@ -11,7 +11,7 @@ import {
   CONNECTION_GOALS,
   type Profile,
 } from '../../src/types/domain';
-import { authenticatedIdentity, requireIdentity, resolveClerkIdentity } from './auth';
+import { authenticatedIdentity, requireIdentity } from './auth';
 import { config } from './config';
 import { getCollections, startSession, type GeoPoint, type MemberDocument } from './database';
 
@@ -51,27 +51,27 @@ const mapPointForProfile = (profile: Profile): GeoPoint | undefined => {
 export const identityRouter = Router();
 
 /**
- * Converts an authenticated Clerk identity into an Invite user exactly once.
+ * Converts an authenticated Supabase identity into an Invite user exactly once.
  * Existing email/password accounts are deliberately NOT linked by email alone;
  * account migration/linking needs a separate recent-authenticated flow.
  */
 identityRouter.post('/provision', requireIdentity, async (request, response) => {
-  if (config.authMode !== 'clerk') {
+  if (config.authMode !== 'supabase') {
     response.status(404).json({ message: 'External identity provisioning is not enabled.' });
     return;
   }
 
   const input = provisionSchema.parse(request.body);
-  const rawIdentity = authenticatedIdentity(response);
-  if (rawIdentity.provider !== 'clerk') {
-    response.status(400).json({ message: 'A Clerk identity is required.' });
+  const identity = authenticatedIdentity(response);
+  if (identity.provider !== 'supabase') {
+    response.status(400).json({ message: 'A Supabase identity is required.' });
     return;
   }
 
   const { members, userIdentities } = await getCollections();
   const existingIdentity = await userIdentities.findOne({
-    provider: 'clerk',
-    providerSubject: rawIdentity.subject,
+    provider: 'supabase',
+    providerSubject: identity.subject,
   });
   if (existingIdentity) {
     const existingMember = await members.findOne({ _id: existingIdentity.userId });
@@ -90,7 +90,6 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
     return;
   }
 
-  const identity = await resolveClerkIdentity(rawIdentity);
   if (!identity.email) {
     response.status(400).json({
       code: 'PRIMARY_EMAIL_REQUIRED',
@@ -161,7 +160,7 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
         {
           _id: randomUUID(),
           userId,
-          provider: 'clerk',
+          provider: 'supabase',
           providerSubject: identity.subject,
           email,
           emailVerified: true,
@@ -174,7 +173,7 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
   } catch (error) {
     if (error instanceof MongoServerError && error.code === 11000) {
       const racedIdentity = await userIdentities.findOne({
-        provider: 'clerk',
+        provider: 'supabase',
         providerSubject: identity.subject,
       });
       if (racedIdentity) {
