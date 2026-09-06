@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, StyleSheet, View } from 'react-native';
 
 import { palette } from '@/constants/theme';
 import { isMongoApiConfigured, setMongoApiTokenProvider } from '@/data/mongodb-api';
@@ -89,9 +89,23 @@ function SupabaseMongoBridge({ children }: { children: React.ReactNode }) {
       setIdentityLoaded(true);
     });
 
+    const appStateSubscription =
+      Platform.OS === 'web'
+        ? undefined
+        : AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active') supabase.auth.startAutoRefresh();
+            else supabase.auth.stopAutoRefresh();
+          });
+
+    if (Platform.OS !== 'web' && AppState.currentState === 'active') {
+      supabase.auth.startAutoRefresh();
+    }
+
     return () => {
       active = false;
       subscription.unsubscribe();
+      appStateSubscription?.remove();
+      if (Platform.OS !== 'web') supabase.auth.stopAutoRefresh();
     };
   }, []);
 
