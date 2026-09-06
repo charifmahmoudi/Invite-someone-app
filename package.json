@@ -33,6 +33,7 @@
     "expo-web-browser": "~57.0.2",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
+    "firebase": "^12.18.0",
     "helmet": "^8.1.0",
     "jose": "^6.1.2",
     "mongodb": "^7.0.0",
