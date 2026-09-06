@@ -95,7 +95,7 @@ function PreferencesFields({
 function FirebaseOnboardingScreen() {
   const router = useRouter();
   const { identityLoaded, identitySignedIn, refreshInviteSession } = useManagedAuth();
-  const [checkingProfile, setCheckingProfile] = useState(false);
+  const [profileCheckComplete, setProfileCheckComplete] = useState(false);
   const [verificationRevision, setVerificationRevision] = useState(0);
   const [step, setStep] = useState<1 | 2>(1);
   const [registrationEmail, setRegistrationEmail] = useState('');
@@ -114,7 +114,6 @@ function FirebaseOnboardingScreen() {
   useEffect(() => {
     if (!identityLoaded || !identitySignedIn || !emailVerified) return;
     let active = true;
-    setCheckingProfile(true);
     void loadMongoMe()
       .then(() => {
         if (!active) return;
@@ -122,7 +121,7 @@ function FirebaseOnboardingScreen() {
         router.replace('/');
       })
       .catch(() => {
-        if (active) setCheckingProfile(false);
+        if (active) setProfileCheckComplete(true);
       });
     return () => {
       active = false;
@@ -190,7 +189,7 @@ function FirebaseOnboardingScreen() {
     }
   };
 
-  const useDifferentAccount = async () => {
+  const switchAccount = async () => {
     if (firebaseAuth) await signOut(firebaseAuth);
     setRegistrationEmail('');
     setRegistrationPassword('');
@@ -228,7 +227,7 @@ function FirebaseOnboardingScreen() {
     }
   };
 
-  if (!identityLoaded || checkingProfile) {
+  if (!identityLoaded || (identitySignedIn && emailVerified && !profileCheckComplete)) {
     return <View style={styles.loading}><ActivityIndicator color={palette.primary} /></View>;
   }
 
@@ -265,7 +264,7 @@ function FirebaseOnboardingScreen() {
           {formError ? <Text accessibilityRole="alert" style={styles.error} testID="auth-error">{formError}</Text> : null}
           <Button label="I’ve verified my email" loading={busy} onPress={() => void checkVerification()} testID="auth-check-verification" />
           <Button fullWidth={false} label="Resend verification email" onPress={() => void resendVerification()} variant="ghost" />
-          <Button fullWidth={false} label="Use a different account" onPress={() => void useDifferentAccount()} variant="ghost" />
+          <Button fullWidth={false} label="Use a different account" onPress={() => void switchAccount()} variant="ghost" />
         </View>
       </ScrollScreen>
     );
