@@ -15,12 +15,10 @@ const environmentSchema = z.object({
   MONGODB_DB_NAME: z.string().min(1).default('invite_someone'),
   MONGODB_MAX_POOL_SIZE: z.coerce.number().int().min(1).max(50).default(5),
   MONGODB_MAX_IDLE_TIME_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
-  AUTH_MODE: z.enum(['internal', 'clerk']).default('internal'),
+  AUTH_MODE: z.enum(['internal', 'supabase']).default('internal'),
   JWT_SECRET: z.string().min(32).default(DEVELOPMENT_JWT_SECRET),
-  CLERK_ISSUER: optionalUrl,
-  CLERK_JWKS_URL: optionalUrl,
-  CLERK_AUDIENCE: z.string().trim().min(1).optional(),
-  CLERK_SECRET_KEY: z.string().trim().min(1).optional(),
+  SUPABASE_URL: optionalUrl,
+  SUPABASE_PUBLISHABLE_KEY: z.string().trim().min(1).optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   CORS_ORIGINS: z.string().default('*'),
 });
@@ -33,11 +31,9 @@ if (
 ) {
   throw new Error('Set a strong JWT_SECRET before starting internal auth in production.');
 }
-if (parsed.AUTH_MODE === 'clerk' && !parsed.CLERK_ISSUER) {
-  throw new Error('CLERK_ISSUER is required when AUTH_MODE=clerk.');
+if (parsed.AUTH_MODE === 'supabase' && (!parsed.SUPABASE_URL || !parsed.SUPABASE_PUBLISHABLE_KEY)) {
+  throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required when AUTH_MODE=supabase.');
 }
-
-const clerkIssuer = parsed.CLERK_ISSUER?.replace(/\/$/, '');
 
 export const config = {
   nodeEnv: parsed.NODE_ENV,
@@ -47,11 +43,8 @@ export const config = {
   mongoMaxIdleTimeMs: parsed.MONGODB_MAX_IDLE_TIME_MS,
   authMode: parsed.AUTH_MODE,
   jwtSecret: parsed.JWT_SECRET,
-  clerkIssuer,
-  clerkJwksUrl:
-    parsed.CLERK_JWKS_URL ?? (clerkIssuer ? `${clerkIssuer}/.well-known/jwks.json` : undefined),
-  clerkAudience: parsed.CLERK_AUDIENCE,
-  clerkSecretKey: parsed.CLERK_SECRET_KEY,
+  supabaseUrl: parsed.SUPABASE_URL?.replace(/\/$/, ''),
+  supabasePublishableKey: parsed.SUPABASE_PUBLISHABLE_KEY,
   port: parsed.PORT,
   corsOrigins:
     parsed.CORS_ORIGINS === '*'
