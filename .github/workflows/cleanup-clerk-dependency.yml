@@ -1,0 +1,39 @@
+name: Cleanup Clerk dependency
+
+on:
+  push:
+    branches: [impl/supabase-auth-staging]
+    paths:
+      - .github/workflows/cleanup-clerk-dependency.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: impl/supabase-auth-staging
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+          cache: npm
+      - name: Remove unused Clerk package
+        run: |
+          npm ci
+          npm uninstall @clerk/expo
+      - name: Commit lockfile cleanup
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No dependency changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: remove unused Clerk dependency"
+          git push origin HEAD:impl/supabase-auth-staging
