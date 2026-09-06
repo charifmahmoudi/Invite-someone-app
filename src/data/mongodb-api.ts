@@ -63,7 +63,7 @@ export interface IdentityProvisionResult {
 let externalTokenProvider: ApiTokenProvider | undefined;
 
 /**
- * Installs the token source used by a managed identity SDK such as Clerk.
+ * Installs the token source used by the managed identity client (currently Supabase Auth).
  * Passing undefined restores the internal Invite-session compatibility path.
  */
 export const setMongoApiTokenProvider = (provider?: ApiTokenProvider) => {
