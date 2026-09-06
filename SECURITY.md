@@ -19,9 +19,12 @@ The project is currently pre-release. Only the latest commit on `main` receives 
 ## Security boundaries
 
 - Mobile/web clients are untrusted.
-- Supabase Auth establishes identity; Postgres Row Level Security and constraints authorize data.
-- `EXPO_PUBLIC_*` configuration is not secret.
-- A Supabase service-role key must never be embedded in or used by this application.
+- Firebase Authentication establishes identity; the Invite Express API owns authorization and business rules.
+- MongoDB Atlas remains the application data store and is reachable only through trusted server infrastructure.
+- Firebase Web configuration and Google OAuth client IDs are public identifiers and may be embedded in the client.
+- Firebase service-account private keys, OAuth client secrets, MongoDB credentials and bearer ID tokens must never be embedded in the app or committed to the repository.
+- The current API verifies Firebase ID tokens using Google's public signing certificates and does not require Firebase Admin credentials.
+- Provider UIDs are mapped to stable internal Invite user IDs; email equality alone never links accounts.
 - Local demo mode is not authentication and must not contain real personal data.
 
-See [Safety and privacy design](./docs/SAFETY_AND_PRIVACY.md) for launch gaps and operational expectations.
+See [Architecture](./docs/ARCHITECTURE.md), [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md), and [Safety and privacy design](./docs/SAFETY_AND_PRIVACY.md).
