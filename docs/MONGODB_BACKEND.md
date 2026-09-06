@@ -4,7 +4,7 @@
 
 The MongoDB connection string is a server credential. Android APK and iPhone IPA bundles can be inspected, so placing `MONGODB_URI` in Expo code would expose the database password.
 
-The phone talks only to the Invite Express API. In the target architecture, Supabase Auth proves identity while the API owns authorization/business rules and MongoDB stores Invite application data.
+The phone talks only to the Invite Express API. In the target architecture, Firebase Authentication proves identity while the API owns authorization/business rules and MongoDB stores Invite application data.
 
 ## Configure the server
 
@@ -18,16 +18,15 @@ Core variables:
 | --- | --- | --- |
 | `MONGODB_URI` | yes | Atlas/self-hosted connection string |
 | `MONGODB_DB_NAME` | yes | Invite application database |
-| `AUTH_MODE` | yes in managed environments | `internal` or `supabase` |
-| `SUPABASE_URL` | when `AUTH_MODE=supabase` | Supabase project URL |
-| `SUPABASE_PUBLISHABLE_KEY` | when `AUTH_MODE=supabase` | public project key used with the caller token for Auth validation |
+| `AUTH_MODE` | yes in managed environments | `internal` or `firebase` |
+| `FIREBASE_PROJECT_ID` | when `AUTH_MODE=firebase` | pins Firebase token audience/issuer to the intended project |
 | `JWT_SECRET` | internal mode only | signs compatibility Invite JWTs |
 | `PORT` | no | defaults to `4000` |
 | `CORS_ORIGINS` | recommended | comma-separated browser origins or `*` |
 
 Never prefix MongoDB credentials or another server secret with `EXPO_PUBLIC_`.
 
-The current Supabase-auth server path does not require a Supabase service-role key.
+The current Firebase server path does **not** require a Firebase service-account JSON/private key. It verifies Firebase ID tokens with Google's public signing certificates.
 
 ## MongoDB requirements
 
@@ -56,35 +55,32 @@ npm run server:dev
 curl http://localhost:4000/health
 ```
 
-For Supabase Auth development, configure `.env.server` with `AUTH_MODE=supabase`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the isolated MongoDB URI/database. Then start the same Express server.
+For Firebase development, configure `.env.server` with `AUTH_MODE=firebase`, `FIREBASE_PROJECT_ID=invite-someone-app`, and an isolated MongoDB URI/database. Then start the same Express server.
 
-See [SUPABASE_AUTH_SETUP.md](./SUPABASE_AUTH_SETUP.md) for the client and provider configuration.
+See [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md) for client/provider configuration.
 
 ## Render deployment
 
-Keep `MONGODB_URI` in Render's environment settings. Do not commit it or copy it into Expo build variables.
+Keep `MONGODB_URI` in Render environment settings. Do not commit it or copy it into Expo build variables.
 
-For a Supabase-enabled service configure:
+For a Firebase-enabled isolated service:
 
 ```bash
 NODE_ENV=production
-AUTH_MODE=supabase
+AUTH_MODE=firebase
+FIREBASE_PROJECT_ID=invite-someone-app
 MONGODB_URI=mongodb+srv://...
 MONGODB_DB_NAME=invite_auth_dev
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 CORS_ORIGINS=*
 ```
 
-`SUPABASE_URL` and the publishable key are not secrets, but they belong in the API environment so token validation is explicitly tied to the intended Supabase project.
-
-After creating a new environment:
+After creating or changing an environment:
 
 1. allow only the deployment's required outbound network ranges in Atlas;
 2. create/verify indexes with `npm run server:indexes` or equivalent maintenance;
 3. verify `/health`;
-4. test an authenticated request through the real identity boundary;
-5. rebuild the phone binary when changing `EXPO_PUBLIC_API_URL` or Supabase public client configuration.
+4. test an authenticated request through the real Firebase identity boundary;
+5. rebuild the phone binary when changing `EXPO_PUBLIC_API_URL` or Firebase/Google public client configuration.
 
 Free services may sleep after inactivity, so the first request after a quiet period can be slower.
 
@@ -96,13 +92,7 @@ Compatibility/internal mode only needs:
 EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
 ```
 
-A managed-auth client uses:
-
-```bash
-EXPO_PUBLIC_API_URL=https://your-supabase-enabled-invite-api.example
-EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-```
+A Firebase managed-auth client uses the variables documented in [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md), including the Invite API URL and Firebase Web configuration. Google additionally uses public per-platform OAuth client IDs.
 
 Android emulators commonly reach a host machine as `10.0.2.2`; physical devices need a reachable LAN/HTTPS development endpoint.
 
@@ -114,11 +104,17 @@ Android emulators commonly reach a host machine as `10.0.2.2`; physical devices 
 - `invitations`: sender/receiver lifecycle with a concurrency-safe active key;
 - `saved_activities`: private per-member bookmarks.
 
-In `AUTH_MODE=supabase`, Supabase access tokens authenticate the caller, but authorization is still performed by the Invite API after resolving the internal Invite user ID.
+In `AUTH_MODE=firebase`, Firebase ID tokens authenticate the caller, but authorization is still performed by the Invite API after resolving the internal Invite user ID.
 
-The compatibility `members.passwordHash` field remains while old internal-auth clients are supported. Supabase-provisioned users receive an unusable random compatibility hash; they do not authenticate with that field.
+The compatibility `members.passwordHash` field remains while old internal-auth clients are supported. Firebase-provisioned users receive an unusable random compatibility hash; their Firebase password is never stored in MongoDB.
 
 API reads omit other members' email/auth data. Community joining uses an atomic activity update. Invitation acceptance updates attendance and invitation state in one MongoDB transaction so a full activity cannot produce a false acceptance.
+
+## Identity mapping and linking
+
+Firebase UIDs are mapped through `user_identities` with `provider=firebase`. Domain records always keep Invite user IDs.
+
+If a verified Firebase email already belongs to a compatibility Invite account and there is no authenticated mapping, provisioning returns `ACCOUNT_LINK_REQUIRED`. Email matching alone never links accounts.
 
 ## Production checklist
 
@@ -127,7 +123,7 @@ Before public use:
 1. restrict Atlas network access to the API deployment;
 2. use TLS/HTTPS for API and MongoDB connections;
 3. use isolated development/E2E/production databases;
-4. verify Supabase Auth provider configuration and account-linking behavior;
+4. verify Firebase Email/Password and Google provider configuration plus account-linking behavior;
 5. add backups, monitoring, redacted request/audit logs and alerting;
 6. run authorization and final-capacity concurrency tests against staging;
 7. add report/block/moderation and account export/deletion operations;
