@@ -1,15 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-// Firebase 12.18's umbrella-package typings currently omit the React Native-only
-// getReactNativePersistence export even though Expo Metro resolves that runtime entry.
-// @ts-expect-error -- Firebase typings mismatch; remove when firebase/auth exposes the RN export to TypeScript.
 import {
   getAuth,
-  getReactNativePersistence,
   initializeAuth,
   type Auth,
+  type Persistence,
 } from 'firebase/auth';
+import * as FirebaseAuthModule from 'firebase/auth';
 import { Platform } from 'react-native';
+
+const getReactNativePersistence = (
+  FirebaseAuthModule as typeof FirebaseAuthModule & {
+    getReactNativePersistence: (storage: typeof AsyncStorage) => Persistence;
+  }
+).getReactNativePersistence;
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim(),
@@ -42,16 +46,3 @@ if (isFirebaseConfigured) {
 }
 
 export { firebaseApp, firebaseAuth };
-
-export const googleClientIds = {
-  android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim(),
-  ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim(),
-  web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(),
-} as const;
-
-export const isGoogleSignInConfigured =
-  Platform.select({
-    android: Boolean(googleClientIds.android),
-    ios: Boolean(googleClientIds.ios),
-    default: Boolean(googleClientIds.web),
-  }) ?? false;
