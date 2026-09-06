@@ -5,27 +5,20 @@ import {
   signInWithCredential,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { isFirebaseAuthConfigured } from '@/auth/firebase-provider';
+import { getGoogleIdToken, isGoogleSignInAvailable } from '@/auth/google-sign-in';
 import { Button } from '@/components/ui/button';
 import { InputField } from '@/components/ui/input-field';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScrollScreen } from '@/components/ui/screen';
 import { palette, radius, spacing, typography } from '@/constants/theme';
-import {
-  firebaseAuth,
-  googleClientIds,
-  isGoogleSignInConfigured,
-} from '@/data/firebase';
+import { firebaseAuth } from '@/data/firebase';
 import { firstValidationMessage, signInSchema } from '@/domain/validation';
 import { useApp } from '@/state/app-context';
-
-WebBrowser.maybeCompleteAuthSession();
 
 const firebaseErrorMessage = (error: unknown, fallback: string) => {
   if (!(error instanceof FirebaseError)) return error instanceof Error ? error.message : fallback;
@@ -49,60 +42,37 @@ function GoogleSignInButton({
   onError,
   onSuccess,
 }: {
-  onError: (message: string) => void;
+  onError: (message: string | undefined) => void;
   onSuccess: () => void;
 }) {
-  const handledToken = useRef<string>();
   const [busy, setBusy] = useState(false);
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
-    {
-      androidClientId: googleClientIds.android,
-      iosClientId: googleClientIds.ios,
-      webClientId: googleClientIds.web,
-      selectAccount: true,
-    },
-    { scheme: 'invite', path: 'google-auth' },
-  );
 
-  useEffect(() => {
-    if (response?.type !== 'success') {
-      if (response?.type === 'error') {
-        setBusy(false);
-        onError('Google sign-in did not complete.');
-      }
-      return;
-    }
-
-    const idToken = response.params.id_token || response.authentication?.idToken;
-    if (!idToken || handledToken.current === idToken) return;
-    handledToken.current = idToken;
-
+  const submit = async () => {
     const auth = firebaseAuth;
     if (!auth) {
-      setBusy(false);
       onError('Firebase Auth is not configured.');
       return;
     }
 
-    void signInWithCredential(auth, GoogleAuthProvider.credential(idToken))
-      .then(() => onSuccess())
-      .catch((error: unknown) =>
-        onError(firebaseErrorMessage(error, 'Unable to continue with Google.')),
-      )
-      .finally(() => setBusy(false));
-  }, [onError, onSuccess, response]);
+    onError(undefined);
+    setBusy(true);
+    try {
+      const idToken = await getGoogleIdToken();
+      if (!idToken) return;
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+      onSuccess();
+    } catch (error) {
+      onError(firebaseErrorMessage(error, 'Unable to continue with Google.'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Button
-      disabled={!request}
       label="Continue with Google"
       loading={busy}
-      onPress={() => {
-        setBusy(true);
-        void promptAsync().then((result) => {
-          if (result.type === 'cancel' || result.type === 'dismiss') setBusy(false);
-        });
-      }}
+      onPress={() => void submit()}
       testID="auth-google"
       variant="outline"
     />
@@ -154,7 +124,10 @@ function FirebaseSignInScreen() {
     setResetBusy(true);
     try {
       await sendPasswordResetEmail(auth, trimmed);
-      Alert.alert('Check your inbox', 'If an account uses that email, Firebase will send password-reset instructions.');
+      Alert.alert(
+        'Check your inbox',
+        'If an account uses that email, Firebase will send password-reset instructions.',
+      );
     } catch (error) {
       setFormError(firebaseErrorMessage(error, 'Unable to send password-reset instructions.'));
     } finally {
@@ -170,7 +143,7 @@ function FirebaseSignInScreen() {
           <Text style={styles.eyebrow}>WELCOME BACK</Text>
           <Text style={styles.title}>Your next good plan is waiting.</Text>
           <Text style={styles.subtitle}>
-            Sign in with email and password{isGoogleSignInConfigured ? ', or continue with Google' : ''}.
+            Sign in with email and password{isGoogleSignInAvailable ? ', or continue with Google' : ''}.
           </Text>
         </View>
 
@@ -212,7 +185,7 @@ function FirebaseSignInScreen() {
             variant="ghost"
           />
 
-          {isGoogleSignInConfigured ? (
+          {isGoogleSignInAvailable ? (
             <>
               <View style={styles.dividerRow}>
                 <View style={styles.divider} />
@@ -276,7 +249,9 @@ function LegacySignInScreen() {
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>WELCOME BACK</Text>
           <Text style={styles.title}>Your next good plan is waiting.</Text>
-          <Text style={styles.subtitle}>Sign in to see invitations, people, and activities picked for you.</Text>
+          <Text style={styles.subtitle}>
+            Sign in to see invitations, people, and activities picked for you.
+          </Text>
         </View>
 
         {!isProductionBackend ? (
@@ -285,20 +260,55 @@ function LegacySignInScreen() {
             <Text style={styles.demoBody}>
               Use demo@invite.app with any password, or open the full demo from the welcome screen.
             </Text>
-            <Button fullWidth={false} label="Fill demo details" onPress={useDemoCredentials} variant="ghost" />
+            <Button
+              fullWidth={false}
+              label="Fill demo details"
+              onPress={useDemoCredentials}
+              variant="ghost"
+            />
           </View>
         ) : null}
 
         <View style={styles.form}>
-          <InputField autoCapitalize="none" autoComplete="email" keyboardType="email-address" label="Email" onChangeText={setEmail} placeholder="you@example.com" returnKeyType="next" testID="auth-email" value={email} />
-          <InputField autoCapitalize="none" autoComplete="password" label="Password" onChangeText={setPassword} onSubmitEditing={() => void submit()} placeholder="Your password" returnKeyType="done" secureTextEntry testID="auth-password" value={password} />
-          {formError ? <Text accessibilityRole="alert" style={styles.error} testID="auth-error">{formError}</Text> : null}
+          <InputField
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            label="Email"
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            returnKeyType="next"
+            testID="auth-email"
+            value={email}
+          />
+          <InputField
+            autoCapitalize="none"
+            autoComplete="password"
+            label="Password"
+            onChangeText={setPassword}
+            onSubmitEditing={() => void submit()}
+            placeholder="Your password"
+            returnKeyType="done"
+            secureTextEntry
+            testID="auth-password"
+            value={password}
+          />
+          {formError ? (
+            <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
+              {formError}
+            </Text>
+          ) : null}
           <Button label="Sign in" loading={state.busy} onPress={() => void submit()} testID="auth-submit" />
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>New here?</Text>
-          <Button fullWidth={false} label="Create a profile" onPress={() => router.replace('/(auth)/sign-up')} variant="ghost" />
+          <Button
+            fullWidth={false}
+            label="Create a profile"
+            onPress={() => router.replace('/(auth)/sign-up')}
+            variant="ghost"
+          />
         </View>
       </View>
     </ScrollScreen>
@@ -316,7 +326,12 @@ const styles = StyleSheet.create({
   eyebrow: { ...typography.micro, color: palette.primaryDark },
   title: { ...typography.h1, color: palette.ink },
   subtitle: { ...typography.body, color: palette.inkMuted },
-  demoCard: { borderRadius: radius.lg, backgroundColor: palette.forestSoft, padding: spacing.lg, gap: spacing.sm },
+  demoCard: {
+    borderRadius: radius.lg,
+    backgroundColor: palette.forestSoft,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
   demoTitle: { ...typography.bodyStrong, color: palette.forest },
   demoBody: { ...typography.small, color: palette.inkMuted },
   form: { gap: spacing.lg },
