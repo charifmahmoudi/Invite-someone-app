@@ -2,6 +2,7 @@ import { onIdTokenChanged, signOut, type User } from 'firebase/auth';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { signOutGoogle } from '@/auth/google-sign-in';
 import { palette } from '@/constants/theme';
 import { firebaseAuth, isFirebaseConfigured } from '@/data/firebase';
 import { isMongoApiConfigured, setMongoApiTokenProvider } from '@/data/mongodb-api';
@@ -48,7 +49,7 @@ function InviteSessionLogoutMirror() {
 
     if (state.hydrated && hadInviteSession.current && firebaseAuth) {
       hadInviteSession.current = false;
-      void signOut(firebaseAuth);
+      void Promise.allSettled([signOut(firebaseAuth), signOutGoogle()]);
     }
   }, [state.hydrated, state.session]);
 
