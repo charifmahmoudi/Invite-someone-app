@@ -2,19 +2,28 @@
 
 ## Purpose
 
-Invite is a cross-platform social activity application built with Expo and React Native. This document describes both the architecture that is running today and the target architecture being introduced incrementally.
+Invite is a cross-platform social activity application built with Expo and React Native. Invite owns its product domain—activities, invitations, visibility, capacity, trust and moderation—while commodity identity and infrastructure stay behind explicit boundaries.
 
-The guiding rule is that Invite owns its product domain—activities, invitations, visibility, capacity, trust and moderation—while commodity infrastructure such as authentication and object storage stays behind explicit boundaries.
+The current target stack is:
+
+- Expo / React Native client;
+- Supabase Auth for identity and sessions;
+- a stateless Express API for authorization and business rules;
+- MongoDB Atlas for application/domain data;
+- Render now, with the API kept portable for Cloud Run later;
+- Cloudflare R2 later for first-party media.
+
+Supabase Auth does **not** make Supabase Postgres the Invite application database.
 
 ## Architecture principles
 
 1. **Thin client.** Screens render state and call typed commands; they do not query MongoDB directly.
 2. **Authoritative API.** Authentication proves identity; the Invite API owns authorization and business rules.
 3. **Stateless compute.** API processes may stop or be replaced without losing domain state.
-4. **Provider-neutral identity.** External identity-provider subjects do not become IDs throughout Invite domain records.
+4. **Provider-neutral identity.** External identity subjects do not become IDs throughout Invite domain records.
 5. **Managed persistence.** MongoDB stores application records; object storage will store uploaded media.
 6. **Scale-to-zero friendly.** Startup is lightweight, Mongo pools are small, reads become paginated, and background services are avoided until needed.
-7. **Portable deployment.** The API is standard Node/Express and has a Docker image so the same application can run on Render, Cloud Run or another container host.
+7. **Portable deployment.** The API is standard Node/Express and has a Docker image so it can run on Render, Cloud Run or another container host.
 8. **Real trust-boundary tests.** E2E tests authenticate through the configured identity system instead of enabling an Invite authentication bypass.
 
 ## Target architecture
@@ -22,10 +31,10 @@ The guiding rule is that Invite owns its product domain—activities, invitation
 ```mermaid
 flowchart LR
   User[User] --> App[Expo / React Native]
-  App -->|sign in / session| Clerk[Clerk]
-  Clerk -->|email OTP / Google / Apple| App
+  App -->|email OTP / Google| Auth[Supabase Auth]
+  Auth -->|access + refresh session| App
   App -->|HTTPS + bearer token| API[Invite Express API]
-  API -->|verify identity token| Clerk
+  API -->|validate access token| Auth
   API -->|application data| Mongo[(MongoDB Atlas)]
   App -->|request upload authorization| API
   API -->|signed upload| App
@@ -39,49 +48,48 @@ flowchart LR
 
 | Component | Owns | Does not own |
 | --- | --- | --- |
-| Expo / React Native | UI, navigation, local presentation state, non-sensitive cache | authorization, database credentials, server secrets |
-| Clerk | authentication, email/social sign-in, sessions, identity tokens | activities, invitations, reputation, moderation rules |
-| Invite API | token verification, authorization, validation, domain rules, orchestration | durable session state, media bytes |
-| MongoDB Atlas | Invite users, identity mappings, profiles, activities, invitations, saved data, future moderation data | first-party authentication passwords after Clerk migration |
-| Cloudflare R2 | uploaded media | Invite domain records |
+| Expo / React Native | UI, navigation, Supabase session client, local presentation/cache | authorization, database credentials, server secrets |
+| Supabase Auth | email/social authentication, access/refresh sessions, external identity UUID | activities, invitations, Invite authorization, Invite profile data |
+| Invite API | identity validation, authorization, validation, domain rules, orchestration | durable session state, media bytes |
+| MongoDB Atlas | Invite users, identity mappings, profiles, activities, invitations, saved data, future moderation data | managed authentication sessions |
+| Cloudflare R2 | future uploaded media | Invite domain records |
 | GitHub Actions | quality gates, native builds, E2E orchestration | secrets embedded into app binaries |
 | Render / Cloud Run | stateless API compute | durable application data |
 
 ## Implementation status
 
-### Implemented now
+### Implemented
 
 - Express API remains the authoritative domain boundary.
-- MongoDB connection creation is lazy and no longer performs index maintenance during every cold start.
-- MongoDB defaults to a small autoscaling-friendly pool (`maxPoolSize=5`, `minPoolSize=0`, idle timeout configurable).
+- MongoDB connection creation is lazy and uses a small autoscaling-friendly pool (`maxPoolSize=5`, `minPoolSize=0`).
 - Database indexes are maintained explicitly with `npm run server:indexes`; seeding also ensures indexes.
-- API startup no longer waits for a MongoDB ping before listening.
+- API startup does not wait for a MongoDB ping.
 - A portable `Dockerfile` and `.dockerignore` exist.
-- Authentication is behind a provider-neutral server boundary with two modes:
-  - `internal` compatibility mode for the current deployed client;
-  - `clerk` mode using issuer/JWKS verification and an internal identity mapping collection.
-- MongoDB contains a `user_identities` collection contract with a unique `(provider, providerSubject)` mapping to an Invite user ID.
-- New resource-oriented paginated reads exist alongside the compatibility `/v1/data` endpoint:
+- Authentication is behind a provider-neutral boundary with two runtime modes:
+  - `internal` compatibility mode for existing binaries;
+  - `supabase` mode using Supabase Auth access tokens and internal identity mappings.
+- MongoDB contains `user_identities` with a unique `(provider, providerSubject)` mapping to an Invite user ID.
+- Supabase-managed email OTP and Google browser OAuth client flows are implemented.
+- New Supabase identities complete Invite profile/preferences onboarding through the Express API; profile data is written to MongoDB.
+- Existing-email provisioning is deliberately rejected with `ACCOUNT_LINK_REQUIRED` rather than silently linking accounts.
+- Resource-oriented paginated reads exist alongside compatibility `/v1/data`:
   - `GET /v1/me`
   - `GET /v1/activities?limit=&cursor=`
   - `GET /v1/people?limit=&cursor=`
   - `GET /v1/invitations?direction=&limit=&cursor=`
   - `GET /v1/saved?limit=&cursor=`
-- The client data adapter exposes page helpers for those endpoints while the existing `AppProvider` may continue using `/v1/data` during migration.
-- Stable UI selectors and a manual Android/Maestro E2E smoke workflow exist.
+- Stable UI selectors and a manual Android/Maestro compatibility E2E workflow exist.
 
-### Configuration still required
+### External configuration still required
 
-The following cannot be made operational without external account configuration:
+- Configure the Supabase email template to display `{{ .Token }}` so the app receives a six-digit OTP rather than only a magic link.
+- Configure Google OAuth in Google Cloud and Supabase Auth.
+- Add Supabase public client variables to managed Expo/GitHub builds.
+- Use an isolated API/database for automated managed-auth E2E.
+- Configure Cloudflare R2 when first-party image upload is implemented.
+- Configure Apple sign-in before iOS production if it becomes a product requirement.
 
-- Clerk development and production instances;
-- Clerk publishable key in Expo builds;
-- Clerk issuer/JWKS/audience configuration in the API;
-- an isolated E2E API/database environment;
-- Cloudflare R2 account/bucket and signing credentials when first-party image upload is implemented;
-- Google and Apple provider configuration.
-
-Until Clerk is configured, production remains on `AUTH_MODE=internal`. That compatibility path is deliberate so architecture work can land without breaking the current Render deployment.
+See [SUPABASE_AUTH_SETUP.md](./SUPABASE_AUTH_SETUP.md) for exact configuration and rollout details.
 
 ## Current runtime paths
 
@@ -89,27 +97,24 @@ Until Clerk is configured, production remains on `AUTH_MODE=internal`. That comp
 flowchart TD
   Screens[Expo Router screens] --> Context[AppProvider]
   Context --> Domain[validation / matching / reducer]
-  Context --> Mode{backend configured?}
-  Mode -->|no| Local[AsyncStorage + demo seed]
-  Mode -->|Mongo API| API[Express API]
+  Context --> API[Express API]
   API --> Auth{AUTH_MODE}
   Auth -->|internal| Legacy[Invite JWT + password compatibility]
-  Auth -->|clerk| External[Clerk JWT verification]
-  API --> DB[MongoDB]
-  Mode -->|legacy compatibility| Supabase[Supabase adapter]
+  Auth -->|supabase| Managed[Supabase Auth session validation]
+  API --> DB[(MongoDB Atlas)]
 ```
 
-The Supabase adapter is compatibility code and is not part of the target production architecture.
+A legacy direct-Supabase data adapter still exists in the client for historical compatibility, but it is **not** the target production data architecture. When `EXPO_PUBLIC_API_URL` is configured, the Mongo-backed Invite API path takes precedence.
 
 ## Authentication and authorization
 
 Authentication answers **who the caller is**. Authorization answers **what that caller may do in Invite**.
 
-The target authentication methods are:
+Target authentication methods:
 
 1. email one-time code;
 2. Google;
-3. Apple when iOS production configuration is available.
+3. Apple later if required for iOS production.
 
 The Invite API continues to enforce rules such as:
 
@@ -122,14 +127,14 @@ The Invite API continues to enforce rules such as:
 
 ### Internal identity mapping
 
-The external authentication subject is mapped to a stable Invite user ID.
+Supabase's user UUID is mapped to a stable Invite user ID.
 
 ```text
 user_identities
   _id
   userId
-  provider            # clerk
-  providerSubject     # Clerk token sub
+  provider            # supabase
+  providerSubject     # Supabase Auth user UUID
   email
   emailVerified
   createdAt
@@ -145,38 +150,55 @@ invitation.receiverId -> Invite user ID
 saved.userId          -> Invite user ID
 ```
 
-This keeps Clerk replaceable and supports future identity linking without rewriting every domain record.
+This keeps the identity provider replaceable and prevents authentication-provider identifiers from leaking throughout the domain model.
 
-### Request flow in Clerk mode
+### Request flow in Supabase mode
 
 ```mermaid
 sequenceDiagram
   participant App as Expo app
-  participant Clerk as Clerk
+  participant Auth as Supabase Auth
   participant API as Invite API
   participant DB as MongoDB
 
-  App->>Clerk: authenticate
-  Clerk-->>App: session / token
-  App->>API: HTTPS + bearer token
-  API->>Clerk: verify issuer / JWKS / audience / expiry
-  API->>DB: resolve provider subject
+  App->>Auth: email OTP or Google sign-in
+  Auth-->>App: access + refresh session
+  App->>API: HTTPS + bearer access token
+  API->>Auth: validate token / fetch authenticated user
+  Auth-->>API: verified user UUID + email
+  API->>DB: resolve provider subject to Invite user
   API->>DB: execute authorized domain operation
   DB-->>API: result
   API-->>App: response
 ```
 
-The server may use `CLERK_SECRET_KEY` for server-only identity operations when needed. It must never be compiled into the Expo app.
+The current server validates each Supabase bearer token against Supabase Auth's authenticated-user endpoint. This is simple and signing-key agnostic for the migration. A future optimization may validate asymmetric JWTs locally against cached Supabase JWKS after measuring whether the extra network hop matters.
+
+No Supabase service-role key is required for this request path.
+
+## New-user provisioning and account linking
+
+A successfully authenticated Supabase identity is not automatically an Invite member.
+
+For a new identity:
+
+1. Supabase verifies the email/social identity.
+2. Invite asks for display name, city, interests, availability and connection goals.
+3. The API verifies the Supabase access token again.
+4. The API checks for an existing `(supabase, subject)` mapping.
+5. The API requires a verified email.
+6. If an existing Invite member already has that email, the API returns `ACCOUNT_LINK_REQUIRED`.
+7. Otherwise, the API creates the Invite member and identity mapping in one MongoDB transaction.
+
+Matching an email string alone is not sufficient proof for account migration. A future legacy-account linking flow must require recent proof of control of both the old Invite account and the Supabase identity.
 
 ## API design
 
 ### Stateless requests
 
-A normal API request follows:
-
 ```text
 request
-  -> verify identity
+  -> validate identity
   -> resolve Invite user
   -> validate input
   -> authorize domain operation
@@ -188,33 +210,25 @@ No important user or domain state exists only in process memory.
 
 ### Resource-oriented reads
 
-The original `/v1/data` endpoint remains temporarily for binary compatibility. New code should migrate screen-by-screen toward smaller endpoints.
-
-All list endpoints use a bounded page size (default 20, maximum 50) and opaque cursor pagination. The cursor is an API implementation detail and clients must treat it as opaque.
-
-This reduces MongoDB reads, JSON serialization, API memory and network transfer as data grows.
+The original `/v1/data` endpoint remains temporarily for binary compatibility. New code should migrate screen-by-screen toward smaller endpoints. List endpoints use bounded page sizes and opaque cursor pagination.
 
 ### Writes and concurrency
 
-The existing atomic capacity and invitation-acceptance transaction remain authoritative. They must not be simplified merely to reduce hosting cost.
-
-For invitation acceptance:
+Invitation/capacity transactional correctness remains authoritative. For invitation acceptance:
 
 1. authenticate and resolve the Invite user;
 2. verify the caller is the invitation receiver;
 3. begin a MongoDB transaction;
 4. atomically add the receiver only if capacity remains;
 5. mark the invitation accepted;
-6. commit both state changes together;
+6. commit both changes together;
 7. update client state only after server success.
 
 Automatic retries for writes require idempotency semantics first.
 
 ## MongoDB architecture
 
-### Connection strategy
-
-The connection client is shared within a process and configured for small autoscaling instances. Default settings are intentionally conservative:
+Default small-instance connection settings:
 
 ```text
 maxPoolSize = 5
@@ -222,15 +236,13 @@ minPoolSize = 0
 maxIdleTimeMS = 30000
 ```
 
-These are starting values, not immutable production tuning. Measure actual latency and connection pressure before increasing them.
-
-### Startup versus maintenance
+Startup and maintenance are separated:
 
 ```text
 API startup
   -> load configuration
   -> start HTTP server
-  -> establish MongoDB access lazily on first database request
+  -> connect to MongoDB lazily on first database request
 
 maintenance
   -> npm run server:indexes
@@ -239,79 +251,48 @@ maintenance
 
 A cold-started container does not reseed data or recreate indexes.
 
-### Index lifecycle
-
-`npm run server:indexes` creates/verifies the expected indexes. Run it when provisioning an environment or after adding/changing an index definition. `server:seed` also calls the index command before inserting development data.
-
 ## Media architecture
 
-Cloudflare R2 is a planned component, not yet an active dependency.
-
-When uploads are introduced, the intended flow is direct-to-object-storage:
-
-```mermaid
-sequenceDiagram
-  participant App as Expo app
-  participant API as Invite API
-  participant R2 as R2
-  participant DB as MongoDB
-  App->>API: request authorized upload
-  API-->>App: signed upload URL / metadata
-  App->>R2: upload resized/compressed media
-  App->>API: confirm media reference
-  API->>DB: persist authorized metadata / URL
-```
-
-The API should not proxy multi-megabyte image bodies unless there is a specific security requirement that cannot be achieved with signed uploads.
+Cloudflare R2 is planned, not active. The intended upload path is direct-to-object-storage through API-issued upload authorization; the API should not proxy multi-megabyte image bodies unless required for a specific security reason.
 
 ## Client state and caching
 
-- authentication/session material belongs in the identity SDK's secure native storage path;
-- AsyncStorage may cache non-sensitive application data;
-- cached reads may render immediately and revalidate in the background;
-- the API remains authoritative for writes;
-- production mutations are not blindly queued offline;
-- client permission checks improve UX but never replace server authorization.
-
-The current global `AppProvider` is acceptable for the MVP. As server-state pagination and invalidation expand, migrate those reads to a server-state cache such as TanStack Query rather than making the context a permanent data layer.
+- Supabase Auth session material is persisted by the Supabase client storage adapter.
+- The access token is supplied to the existing Mongo API adapter through a managed token-provider boundary.
+- AsyncStorage may cache non-sensitive application data.
+- The API remains authoritative for writes.
+- Client permission checks improve UX but never replace server authorization.
+- The current global `AppProvider` is acceptable for the MVP; migrate growing paginated server state toward a query/cache layer rather than permanent global context expansion.
 
 ## Deployment architecture
 
-### Today
+Today:
 
 ```text
-Expo app -> Render free API -> MongoDB Atlas
+Expo app -> Render API -> MongoDB Atlas
+       \-> Supabase Auth
 ```
 
-Render is acceptable for development, demos and private beta. The client must tolerate cold starts on read requests.
-
-### Portable target
-
-```text
-GitHub -> CI -> Docker image -> Render or Cloud Run
-```
-
-The `Dockerfile` is intentionally provider-neutral. The application does not require a persistent local filesystem.
-
-Cloud Run is an optional later deployment target. If used for an MVP, start with zero minimum instances and a deliberately small maximum instance count to control cost.
+The API remains a normal Node/Express service with a provider-neutral Docker image. Render is suitable for development/private beta; Cloud Run remains an optional later target.
 
 ## Environment separation
 
 | Environment | Identity | API | MongoDB | Purpose |
 | --- | --- | --- | --- | --- |
-| development | Clerk development after migration | local/dev | local/dev | developer iteration |
-| E2E | Clerk development/test after migration | isolated E2E | isolated E2E | deterministic emulator tests |
-| production | Clerk production | production | production | real users |
+| development | Supabase development project | dev API | isolated dev DB | developer iteration |
+| E2E | Supabase test/development identity | isolated E2E API | isolated E2E DB | emulator/API tests |
+| production | production Supabase configuration | production API | production DB | real users |
 
-An E2E emulator must never run against production identity plus production data.
+Automated E2E must never target production identity plus production data.
 
 ## Repository direction
 
 ```text
 src/
   app/                  routes/screens
+  auth/                 managed identity bridge
   components/           reusable UI
-  data/                 API/cache adapters
+  data/                 API/session adapters
   domain/               pure business rules
   state/                application orchestration
   types/                domain contracts
@@ -321,6 +302,7 @@ server/src/
   auth.ts               provider-neutral authentication boundary
   config.ts             runtime configuration
   database.ts           Mongo connection and collection contracts
+  identity-router.ts    external identity -> Invite provisioning
   resource-router.ts    paginated read API
   app.ts                compatibility routes + domain mutations
   indexes.ts            explicit index maintenance
@@ -328,37 +310,27 @@ server/src/
 
 docs/
   ARCHITECTURE.md
+  SUPABASE_AUTH_SETUP.md
   TESTING.md
 ```
 
-`server/src/app.ts` and `src/state/app-context.tsx` are still large orchestration files. Split them by domain as the migration proceeds rather than introducing microservices.
-
 ## Non-goals
 
-The current stage does not require:
-
-- Kubernetes;
-- microservices;
-- Kafka;
-- mandatory Redis;
-- a separate worker before real background workloads exist;
-- persistent WebSocket infrastructure before realtime features exist;
-- a custom password/authentication platform.
-
-A single stateless API, one application database, one identity provider and object storage are sufficient for the foreseeable MVP/private-beta stage.
+The current stage does not require Kubernetes, microservices, Kafka, mandatory Redis, a separate worker, persistent WebSocket infrastructure, a custom authentication platform, or migration of Invite domain data to Supabase Postgres.
 
 ## Migration sequence
 
-1. **Implemented:** document architecture and E2E trust boundaries.
-2. **Implemented:** Dockerize the API.
-3. **Implemented:** separate cold start from index/seed maintenance.
-4. **Implemented:** tune MongoDB connection pooling for small autoscaling instances.
-5. **Implemented foundation:** add paginated resource endpoints while preserving `/v1/data` compatibility.
-6. **Implemented foundation:** introduce provider-neutral authentication and Clerk JWT verification mode.
-7. **Next, requires Clerk configuration:** add Expo Clerk provider, email OTP/Google UI and identity provisioning/linking.
-8. **Then:** migrate screens from bootstrap state toward paginated reads/cache.
-9. **Then:** remove Invite password hashes/JWT issuance after Clerk migration is proven.
-10. **Then:** add R2 direct uploads when first-party media upload ships.
-11. **Then:** move the same container from Render to Cloud Run only if operationally useful.
+1. **Implemented:** architecture and trust-boundary documentation.
+2. **Implemented:** Dockerized, scale-to-zero-friendly Express/MongoDB API.
+3. **Implemented:** paginated resource endpoint foundation while preserving `/v1/data` compatibility.
+4. **Implemented:** provider-neutral internal identity mapping.
+5. **Implemented:** Supabase Auth client bridge, email OTP UI, Google browser OAuth and profile provisioning path.
+6. **In progress:** validate the Supabase-enabled isolated Render/MongoDB environment and configure hosted email OTP template.
+7. **Next:** configure Google provider and managed build variables.
+8. **Next:** add real Supabase-authenticated API/device tests against isolated infrastructure.
+9. **Then:** implement explicit legacy account linking/migration and a safe production cutover window.
+10. **Then:** migrate screens from bootstrap `/v1/data` state toward paginated reads/cache.
+11. **Then:** retire Invite password hashes/JWT issuance after legacy clients are no longer supported.
+12. **Then:** add R2 direct uploads when first-party media upload ships.
 
 See [TESTING.md](./TESTING.md) for validation and E2E requirements.
