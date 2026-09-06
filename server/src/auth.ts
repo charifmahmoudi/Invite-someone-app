@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { createRemoteJWKSet, jwtVerify, SignJWT, type JWTPayload } from 'jose';
+import { jwtVerify, SignJWT } from 'jose';
 
 import { config } from './config';
 import { getCollections } from './database';
@@ -7,53 +7,48 @@ import { getCollections } from './database';
 const jwtKey = new TextEncoder().encode(config.jwtSecret);
 const internalIssuer = 'invite-someone-api';
 const internalAudience = 'invite-someone-mobile';
-const clerkJwks = config.clerkJwksUrl
-  ? createRemoteJWKSet(new URL(config.clerkJwksUrl))
-  : undefined;
 
 export interface AuthIdentity {
-  provider: 'internal' | 'clerk';
+  provider: 'internal' | 'supabase';
   subject: string;
   email?: string;
   emailVerified?: boolean;
 }
 
-export interface ResolvedAuthIdentity extends AuthIdentity {
+interface SupabaseUser {
+  id?: string;
   email?: string;
-  emailVerified?: boolean;
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
 }
 
-const stringClaim = (payload: JWTPayload, names: string[]) => {
-  for (const name of names) {
-    const value = payload[name];
-    if (typeof value === 'string' && value.trim()) return value.trim();
+const verifySupabaseToken = async (token: string): Promise<AuthIdentity> => {
+  if (!config.supabaseUrl || !config.supabasePublishableKey) {
+    throw new Error('Supabase authentication is not configured.');
   }
-  return undefined;
-};
 
-const booleanClaim = (payload: JWTPayload, names: string[]) => {
-  for (const name of names) {
-    const value = payload[name];
-    if (typeof value === 'boolean') return value;
-  }
-  return undefined;
+  const result = await fetch(`${config.supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: config.supabasePublishableKey,
+      Authorization: `Bearer ${token}`,
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!result.ok) throw new Error(`Supabase token validation failed with status ${result.status}.`);
+
+  const user = (await result.json()) as SupabaseUser;
+  if (!user.id) throw new Error('Missing Supabase user ID.');
+
+  return {
+    provider: 'supabase',
+    subject: user.id,
+    email: user.email,
+    emailVerified: Boolean(user.email && (user.email_confirmed_at || user.confirmed_at)),
+  };
 };
 
 const verifyIdentityToken = async (token: string): Promise<AuthIdentity> => {
-  if (config.authMode === 'clerk') {
-    if (!clerkJwks || !config.clerkIssuer) throw new Error('Clerk authentication is not configured.');
-    const { payload } = await jwtVerify(token, clerkJwks, {
-      issuer: config.clerkIssuer,
-      ...(config.clerkAudience ? { audience: config.clerkAudience } : {}),
-    });
-    if (!payload.sub) throw new Error('Missing Clerk subject.');
-    return {
-      provider: 'clerk',
-      subject: payload.sub,
-      email: stringClaim(payload, ['email', 'email_address', 'primary_email_address']),
-      emailVerified: booleanClaim(payload, ['email_verified', 'email_address_verified']),
-    };
-  }
+  if (config.authMode === 'supabase') return verifySupabaseToken(token);
 
   const { payload } = await jwtVerify(token, jwtKey, {
     issuer: internalIssuer,
@@ -87,7 +82,7 @@ const authenticate = async (request: Request, response: Response) => {
 
 export const issueAccessToken = (userId: string) => {
   if (config.authMode !== 'internal') {
-    throw new Error('Invite-issued access tokens are disabled when AUTH_MODE=clerk.');
+    throw new Error('Invite-issued access tokens are disabled when managed authentication is enabled.');
   }
   return new SignJWT({ sub: userId })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
@@ -123,7 +118,7 @@ export const requireAuthentication = async (
 
   const { userIdentities } = await getCollections();
   const mapping = await userIdentities.findOne({
-    provider: 'clerk',
+    provider: 'supabase',
     providerSubject: identity.subject,
   });
   if (!mapping) {
@@ -141,39 +136,3 @@ export const requireAuthentication = async (
 export const authenticatedUserId = (response: Response): string => response.locals.userId as string;
 export const authenticatedIdentity = (response: Response): AuthIdentity =>
   response.locals.identity as AuthIdentity;
-
-/**
- * Clerk session tokens do not have to carry profile/email claims. Provisioning
- * needs a positively verified primary email, so consult Clerk whenever the token
- * itself does not already prove both the address and its verification state.
- */
-export const resolveClerkIdentity = async (
-  identity: AuthIdentity,
-): Promise<ResolvedAuthIdentity> => {
-  if (identity.provider !== 'clerk') return identity;
-  if (identity.email && identity.emailVerified === true) return identity;
-  if (!config.clerkSecretKey) return identity;
-
-  const result = await fetch(
-    `https://api.clerk.com/v1/users/${encodeURIComponent(identity.subject)}`,
-    { headers: { Authorization: `Bearer ${config.clerkSecretKey}` } },
-  );
-  if (!result.ok) throw new Error(`Clerk user lookup failed with status ${result.status}.`);
-
-  const user = (await result.json()) as {
-    primary_email_address_id?: string | null;
-    email_addresses?: {
-      id: string;
-      email_address: string;
-      verification?: { status?: string };
-    }[];
-  };
-  const primary =
-    user.email_addresses?.find((address) => address.id === user.primary_email_address_id) ??
-    user.email_addresses?.[0];
-  return {
-    ...identity,
-    email: primary?.email_address ?? identity.email,
-    emailVerified: primary?.verification?.status === 'verified',
-  };
-};
