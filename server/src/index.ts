@@ -18,7 +18,7 @@ const start = () => {
   app.use(cors({ origin: config.corsOrigins }));
   app.use(express.json({ limit: '256kb' }));
 
-  // Clerk provisioning lives beside, not inside, the compatibility password API.
+  // Managed identity provisioning lives beside, not inside, the compatibility password API.
   // /login and /register simply fall through when they do not match this router.
   app.use('/v1/auth', identityRouter);
 
