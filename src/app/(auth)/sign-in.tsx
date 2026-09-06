@@ -1,27 +1,22 @@
-import { isClerkAPIResponseError, useSignIn, useSignUp, useSSO } from '@clerk/expo';
-import * as AuthSession from 'expo-auth-session';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { isClerkConfigured } from '@/auth/clerk-provider';
+import { isSupabaseAuthConfigured } from '@/auth/supabase-provider';
 import { Button } from '@/components/ui/button';
 import { InputField } from '@/components/ui/input-field';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScrollScreen } from '@/components/ui/screen';
 import { palette, radius, spacing, typography } from '@/constants/theme';
+import { supabase } from '@/data/supabase';
 import { firstValidationMessage, signInSchema } from '@/domain/validation';
 import { useApp } from '@/state/app-context';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const clerkErrorMessage = (error: unknown, fallback: string) => {
-  if (isClerkAPIResponseError(error)) {
-    return error.errors[0]?.longMessage ?? error.errors[0]?.message ?? fallback;
-  }
-  return error instanceof Error ? error.message : fallback;
-};
+const authErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
 function useWarmUpBrowser() {
   useEffect(() => {
@@ -33,17 +28,33 @@ function useWarmUpBrowser() {
   }, []);
 }
 
-function ClerkSignInScreen() {
+const GOOGLE_REDIRECT_URL = 'invite://google-auth';
+
+const sessionTokensFromUrl = (url: string) => {
+  const parsed = new URL(url);
+  const params = new URLSearchParams(
+    parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.search.slice(1),
+  );
+  return {
+    accessToken: params.get('access_token'),
+    refreshToken: params.get('refresh_token'),
+  };
+};
+
+function SupabaseSignInScreen() {
   useWarmUpBrowser();
   const router = useRouter();
-  const { signIn, fetchStatus } = useSignIn();
-  const { signUp } = useSignUp();
-  const { startSSOFlow } = useSSO();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [socialBusy, setSocialBusy] = useState(false);
   const [formError, setFormError] = useState<string>();
+
+  const requireSupabase = () => {
+    if (!supabase) throw new Error('Supabase Auth is not configured.');
+    return supabase;
+  };
 
   const sendEmailCode = async () => {
     if (!email.trim() || !email.includes('@')) {
@@ -52,26 +63,19 @@ function ClerkSignInScreen() {
     }
 
     setFormError(undefined);
-    const { error: createError } = await signIn.create({
-      identifier: email.trim(),
-      signUpIfMissing: true,
-    } as Parameters<typeof signIn.create>[0]);
-    if (createError) {
-      setFormError(clerkErrorMessage(createError, 'Unable to start email sign-in.'));
-      return;
+    setBusy(true);
+    try {
+      const { error } = await requireSupabase().auth.signInWithOtp({
+        email: email.trim(),
+        options: { shouldCreateUser: true },
+      });
+      if (error) throw error;
+      setVerifying(true);
+    } catch (error) {
+      setFormError(authErrorMessage(error, 'Unable to send a verification code.'));
+    } finally {
+      setBusy(false);
     }
-
-    const { error: sendError } = await signIn.emailCode.sendCode();
-    if (sendError) {
-      setFormError(clerkErrorMessage(sendError, 'Unable to send a verification code.'));
-      return;
-    }
-
-    setVerifying(true);
-  };
-
-  const finishAuthentication = () => {
-    router.replace('/');
   };
 
   const verifyEmailCode = async () => {
@@ -81,90 +85,67 @@ function ClerkSignInScreen() {
     }
 
     setFormError(undefined);
-    const { error } = await signIn.emailCode.verifyCode({ code: code.trim() });
-
-    if (error) {
-      const shouldTransferToSignUp =
-        isClerkAPIResponseError(error) &&
-        error.errors.some((item) => item.code === 'sign_up_if_missing_transfer');
-
-      if (!shouldTransferToSignUp) {
-        setFormError(clerkErrorMessage(error, 'That verification code could not be accepted.'));
-        return;
-      }
-
-      const { error: transferError } = await signUp.create({ transfer: true });
-      if (transferError) {
-        setFormError(clerkErrorMessage(transferError, 'Unable to create your Clerk account.'));
-        return;
-      }
-
-      if (signUp.status !== 'complete') {
-        setFormError(
-          'Your Clerk instance requires additional identity fields. Configure Clerk to require only a verified email for this Invite flow.',
-        );
-        return;
-      }
-
-      const { error: finalizeError } = await signUp.finalize();
-      if (finalizeError) {
-        setFormError(clerkErrorMessage(finalizeError, 'Unable to finish account creation.'));
-        return;
-      }
-      finishAuthentication();
-      return;
+    setBusy(true);
+    try {
+      const { data, error } = await requireSupabase().auth.verifyOtp({
+        email: email.trim(),
+        token: code.trim(),
+        type: 'email',
+      });
+      if (error) throw error;
+      if (!data.session) throw new Error('Supabase did not create a session for this code.');
+      router.replace('/');
+    } catch (error) {
+      setFormError(authErrorMessage(error, 'That verification code could not be accepted.'));
+    } finally {
+      setBusy(false);
     }
-
-    if (signIn.status !== 'complete') {
-      setFormError('This account requires an additional authentication step that Invite does not support yet.');
-      return;
-    }
-
-    const { error: finalizeError } = await signIn.finalize();
-    if (finalizeError) {
-      setFormError(clerkErrorMessage(finalizeError, 'Unable to finish sign-in.'));
-      return;
-    }
-    finishAuthentication();
   };
 
   const continueWithGoogle = async () => {
     setFormError(undefined);
     setSocialBusy(true);
     try {
-      const result = await startSSOFlow({
-        strategy: 'oauth_google',
-        redirectUrl: AuthSession.makeRedirectUri({ scheme: 'invite', path: 'sso-callback' }),
+      const client = requireSupabase();
+      const { data, error } = await client.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: GOOGLE_REDIRECT_URL,
+          queryParams: { prompt: 'consent' },
+          skipBrowserRedirect: true,
+        },
       });
+      if (error) throw error;
+      if (!data.url) throw new Error('Supabase did not return a Google sign-in URL.');
 
-      if (result.authSessionResult?.type === 'cancel' || result.authSessionResult?.type === 'dismiss') {
-        return;
+      const result = await WebBrowser.openAuthSessionAsync(data.url, GOOGLE_REDIRECT_URL, {
+        showInRecents: true,
+      });
+      if (result.type === 'cancel' || result.type === 'dismiss') return;
+      if (result.type !== 'success') throw new Error('Google sign-in did not complete.');
+
+      const { accessToken, refreshToken } = sessionTokensFromUrl(result.url);
+      if (!accessToken || !refreshToken) {
+        throw new Error('Google sign-in returned without a Supabase session.');
       }
-
-      if (!result.createdSessionId || !result.setActive) {
-        setFormError(
-          'Google sign-in needs another authentication step. Check the Clerk social connection configuration.',
-        );
-        return;
-      }
-
-      await result.setActive({ session: result.createdSessionId });
-      finishAuthentication();
+      const { error: sessionError } = await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (sessionError) throw sessionError;
+      router.replace('/');
     } catch (error) {
-      setFormError(clerkErrorMessage(error, 'Unable to continue with Google.'));
+      setFormError(authErrorMessage(error, 'Unable to continue with Google.'));
     } finally {
       setSocialBusy(false);
     }
   };
 
   const resetEmailFlow = () => {
-    signIn.reset();
     setCode('');
     setVerifying(false);
     setFormError(undefined);
   };
-
-  const busy = fetchStatus === 'fetching';
 
   return (
     <ScrollScreen keyboardAware contentContainerStyle={styles.scroll}>
@@ -178,7 +159,7 @@ function ClerkSignInScreen() {
           <Text style={styles.subtitle}>
             {verifying
               ? `Enter the code sent to ${email.trim()}.`
-              : 'Use email or Google. If you are new, the same flow creates your account before you finish your Invite profile.'}
+              : 'Use email or Google. If you are new, the same flow creates your identity before you finish your Invite profile.'}
           </Text>
         </View>
 
@@ -211,7 +192,7 @@ function ClerkSignInScreen() {
               <Button
                 fullWidth={false}
                 label="Send a new code"
-                onPress={() => void signIn.emailCode.sendCode()}
+                onPress={() => void sendEmailCode()}
                 variant="ghost"
               />
               <Button
@@ -258,12 +239,11 @@ function ClerkSignInScreen() {
                 testID="auth-google"
                 variant="outline"
               />
-              <View nativeID="clerk-captcha" />
             </>
           )}
         </View>
 
-        <Text style={styles.clerkNote}>
+        <Text style={styles.managedAuthNote}>
           New users will choose interests, availability, and connection goals after identity verification.
         </Text>
       </View>
@@ -378,7 +358,7 @@ function LegacySignInScreen() {
 }
 
 export default function SignInScreen() {
-  return isClerkConfigured ? <ClerkSignInScreen /> : <LegacySignInScreen />;
+  return isSupabaseAuthConfigured ? <SupabaseSignInScreen /> : <LegacySignInScreen />;
 }
 
 const styles = StyleSheet.create({
@@ -403,5 +383,5 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   divider: { flex: 1, height: 1, backgroundColor: palette.border },
   dividerText: { ...typography.small, color: palette.inkMuted },
-  clerkNote: { ...typography.small, color: palette.inkMuted, textAlign: 'center' },
+  managedAuthNote: { ...typography.small, color: palette.inkMuted, textAlign: 'center' },
 });
