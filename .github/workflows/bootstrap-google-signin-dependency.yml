@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: impl/firebase-auth
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13
@@ -31,4 +32,5 @@ jobs:
             exit 0
           fi
           git commit -m "chore: add native Google sign-in dependencies"
+          git pull --rebase origin impl/firebase-auth
           git push origin HEAD:impl/firebase-auth
