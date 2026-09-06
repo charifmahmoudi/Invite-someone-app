@@ -15,8 +15,8 @@ The same TypeScript codebase runs on iPhone, Android, and the web using Expo SDK
 - Community activities that members can join, with transactional capacity protection in production
 - Profile editing, attendance history, reliability signals, and hosted plans
 - First-meeting safety guidance embedded in invitation and activity flows
-- Smooth native navigation, press animations, haptics, responsive layouts, and accessible labels
-- Local demo mode plus a server-side MongoDB API with secure mobile sessions
+- Local demo/internal-auth compatibility plus Supabase Auth managed identity
+- Server-side Express/MongoDB API for authorization and product data
 
 ## Quick start
 
@@ -35,7 +35,7 @@ npm test
 npm run lint
 ```
 
-Start the development server:
+Start Expo:
 
 ```bash
 npm start
@@ -52,7 +52,9 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 ## Installable builds
 
-Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.4` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission. Preview 4 defaults to the live Render API; the public repository Actions variable `INVITE_API_URL` can override that URL for later environments.
+Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.4` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
+
+The current published preview remains on the compatibility API until a Supabase-enabled build and API are deliberately cut over together. See [Supabase Auth setup](./docs/SUPABASE_AUTH_SETUP.md).
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 
@@ -61,39 +63,55 @@ npx eas-cli init
 npx eas-cli build --platform android --profile preview
 ```
 
-An installable iPhone IPA must be signed with an Apple Developer certificate and provisioning profile. The repository owner can link the project and let EAS manage those private credentials without committing them:
-
-```bash
-npx eas-cli init
-npx eas-cli build --platform ios --profile preview
-```
-
-The iOS command prompts the authorized Apple Developer account when credentials have not been configured. An unsigned iOS archive is deliberately not published because it cannot be installed on a physical iPhone.
+An installable iPhone IPA must be signed with an Apple Developer certificate and provisioning profile.
 
 ## Try the complete demo
 
 No backend is required for product review. On the welcome screen, choose **Explore the demo**. Demo changes are persisted on the device with AsyncStorage.
 
-You can also use the local sign-in screen:
+You can also use the local compatibility sign-in screen:
 
 - Email: `demo@invite.app`
-- Password: any non-empty value
+- Password: any non-empty value in local preview mode
 
-Local account creation intentionally stores no password. It exists only to exercise onboarding in preview mode.
+## Production architecture
 
-## Connect MongoDB
+Invite deliberately separates identity from product data:
 
-Invite uses the MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the entire instance.
+```text
+Expo / React Native
+   |-- Supabase Auth: email OTP + Google identity/session
+   |
+   `-- Invite Express API: authorization + business rules
+              |
+              `-- MongoDB Atlas: Invite profiles/domain data
+```
 
-1. Create a MongoDB Atlas deployment or a local replica set.
-2. Copy `server/.env.example` to `.env.server` and set `MONGODB_URI`, `MONGODB_DB_NAME`, and a strong `JWT_SECRET`. Development defaults point to `mongodb://127.0.0.1:27017` and production refuses the development JWT secret.
-3. Run `npm run server:seed` once for fictional demo members, then `npm run server:dev`.
-4. Deploy the API behind HTTPS and set `EXPO_PUBLIC_API_URL=https://your-api.example` in the mobile build environment.
-5. Restart/rebuild Expo because `EXPO_PUBLIC_*` values are embedded into the application bundle.
+Supabase Postgres is **not** the Invite application database. MongoDB remains authoritative for profiles, activities, invitations, saved plans and identity mappings.
 
-The API hashes passwords, rate-limits authentication, keeps bearer sessions in Android Keystore/iOS Keychain storage, removes member emails from public profile responses, protects every mutation with server authorization, uses a `2dsphere` index for coarse discovery, and performs invitation acceptance plus attendance in a MongoDB transaction. See [MongoDB backend setup](./docs/MONGODB_BACKEND.md).
+The Express API maps each Supabase Auth user UUID to an internal Invite user ID, so authentication-provider IDs do not leak throughout the domain model.
 
-The previous Supabase adapter and migration remain available as a compatibility path when no MongoDB API URL is configured.
+See [Architecture](./docs/ARCHITECTURE.md) and [Supabase Auth setup](./docs/SUPABASE_AUTH_SETUP.md).
+
+## Connect MongoDB and the API
+
+Invite uses the Express/MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the database.
+
+For compatibility/internal auth, see [MongoDB backend setup](./docs/MONGODB_BACKEND.md). For the target managed-auth configuration, set the API to `AUTH_MODE=supabase` and follow [SUPABASE_AUTH_SETUP.md](./docs/SUPABASE_AUTH_SETUP.md).
+
+The API protects every mutation with server authorization, removes private auth/email fields from public profile responses, uses coarse geospatial discovery, and performs invitation acceptance plus attendance in a MongoDB transaction.
+
+## Managed-auth client variables
+
+A Supabase-enabled build uses public configuration only:
+
+```bash
+EXPO_PUBLIC_API_URL=https://your-invite-api.example
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+Never put MongoDB credentials or Supabase secret/service-role keys in `EXPO_PUBLIC_*` variables.
 
 ## Commands
 
@@ -110,6 +128,7 @@ The previous Supabase adapter and migration remain available as a compatibility 
 | `npm run export:web`   | Produce a static web export                       |
 | `npm run server:dev`   | Start the MongoDB API with file watching          |
 | `npm run server:start` | Start the MongoDB API                             |
+| `npm run server:indexes` | Create/verify MongoDB indexes                   |
 | `npm run server:seed`  | Seed an empty database with fictional demo data   |
 | `npm run format`       | Format source and documentation                   |
 
@@ -118,6 +137,8 @@ The previous Supabase adapter and migration remain available as a compatibility 
 - [Product brief](./docs/PRODUCT.md)
 - [User stories and acceptance criteria](./docs/USER_STORIES.md)
 - [Architecture](./docs/ARCHITECTURE.md)
+- [Supabase Auth setup](./docs/SUPABASE_AUTH_SETUP.md)
+- [MongoDB backend setup](./docs/MONGODB_BACKEND.md)
 - [Data model and security rules](./docs/DATA_MODEL.md)
 - [Testing strategy](./docs/TESTING.md)
 - [Safety and privacy](./docs/SAFETY_AND_PRIVACY.md)
@@ -125,7 +146,7 @@ The previous Supabase adapter and migration remain available as a compatibility 
 
 ## Project status
 
-This repository contains a functional, testable MVP. Push notifications, chat, moderation operations, image uploads, localization, analytics, and app-store release credentials are intentionally listed as post-MVP work rather than represented as finished features.
+This repository contains a functional, testable MVP. Supabase Auth migration is being staged without breaking already-installed internal-auth builds. Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store release credentials remain post-MVP or later migration work.
 
 ## License
 
