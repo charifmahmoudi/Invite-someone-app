@@ -4,41 +4,41 @@
 
 Invite is a cross-platform social activity application built with Expo and React Native. Invite owns its product domain—activities, invitations, visibility, capacity, trust and moderation—while commodity identity and infrastructure stay behind explicit boundaries.
 
-The current target stack is:
+Target stack:
 
 - Expo / React Native client;
-- Supabase Auth for identity and sessions;
-- a stateless Express API for authorization and business rules;
+- Firebase Authentication for identity and sessions;
+- stateless Express API for authorization and business rules;
 - MongoDB Atlas for application/domain data;
-- Render now, with the API kept portable for Cloud Run later;
+- Render now, with portable container deployment for Cloud Run later;
 - Cloudflare R2 later for first-party media.
 
-Supabase Auth does **not** make Supabase Postgres the Invite application database.
+Firebase is an identity provider only. It does not replace MongoDB as the Invite application database.
 
 ## Architecture principles
 
-1. **Thin client.** Screens render state and call typed commands; they do not query MongoDB directly.
-2. **Authoritative API.** Authentication proves identity; the Invite API owns authorization and business rules.
+1. **Thin client.** Screens render state and call typed commands; they do not connect directly to MongoDB.
+2. **Authoritative API.** Firebase proves identity; the Invite API owns authorization and business rules.
 3. **Stateless compute.** API processes may stop or be replaced without losing domain state.
-4. **Provider-neutral identity.** External identity subjects do not become IDs throughout Invite domain records.
+4. **Provider-neutral identity.** Firebase UIDs never become IDs throughout Invite domain records.
 5. **Managed persistence.** MongoDB stores application records; object storage will store uploaded media.
-6. **Scale-to-zero friendly.** Startup is lightweight, Mongo pools are small, reads become paginated, and background services are avoided until needed.
-7. **Portable deployment.** The API is standard Node/Express and has a Docker image so it can run on Render, Cloud Run or another container host.
-8. **Real trust-boundary tests.** E2E tests authenticate through the configured identity system instead of enabling an Invite authentication bypass.
+6. **Scale-to-zero friendly.** Startup is lightweight, Mongo pools are small, reads are paginated, and background services are avoided until needed.
+7. **Portable deployment.** The API is normal Node/Express with a Docker image.
+8. **Real trust-boundary tests.** E2E tests authenticate through the configured identity system instead of enabling an Invite bypass.
 
 ## Target architecture
 
 ```mermaid
 flowchart LR
   User[User] --> App[Expo / React Native]
-  App -->|email OTP / Google| Auth[Supabase Auth]
-  Auth -->|access + refresh session| App
-  App -->|HTTPS + bearer token| API[Invite Express API]
-  API -->|validate access token| Auth
+  App -->|email/password or Google| Auth[Firebase Authentication]
+  Auth -->|Firebase session + ID token| App
+  App -->|HTTPS + bearer ID token| API[Invite Express API]
+  API -->|verify signature + Firebase claims| Keys[Google Firebase signing certificates]
   API -->|application data| Mongo[(MongoDB Atlas)]
   App -->|request upload authorization| API
   API -->|signed upload| App
-  App -->|direct media upload| R2[(Cloudflare R2)]
+  App -->|future direct media upload| R2[(Cloudflare R2)]
   API -->|media metadata| Mongo
   GitHub[GitHub Actions] --> Host[Render now / Cloud Run later]
   Host --> API
@@ -48,93 +48,58 @@ flowchart LR
 
 | Component | Owns | Does not own |
 | --- | --- | --- |
-| Expo / React Native | UI, navigation, Supabase session client, local presentation/cache | authorization, database credentials, server secrets |
-| Supabase Auth | email/social authentication, access/refresh sessions, external identity UUID | activities, invitations, Invite authorization, Invite profile data |
-| Invite API | identity validation, authorization, validation, domain rules, orchestration | durable session state, media bytes |
+| Expo / React Native | UI, navigation, Firebase client session, local presentation/cache | authorization, database credentials, server secrets |
+| Firebase Authentication | email/password, email verification, password reset, Google identity, Firebase UID/session | Invite profiles, activities, invitations, Invite authorization |
+| Invite API | Firebase token validation, internal-user resolution, authorization, validation, domain rules | Firebase credentials, durable session state, media bytes |
 | MongoDB Atlas | Invite users, identity mappings, profiles, activities, invitations, saved data, future moderation data | managed authentication sessions |
 | Cloudflare R2 | future uploaded media | Invite domain records |
 | GitHub Actions | quality gates, native builds, E2E orchestration | secrets embedded into app binaries |
 | Render / Cloud Run | stateless API compute | durable application data |
 
-## Implementation status
+## Authentication modes
 
-### Implemented
+The API intentionally keeps two runtime modes during migration:
 
-- Express API remains the authoritative domain boundary.
-- MongoDB connection creation is lazy and uses a small autoscaling-friendly pool (`maxPoolSize=5`, `minPoolSize=0`).
-- Database indexes are maintained explicitly with `npm run server:indexes`; seeding also ensures indexes.
-- API startup does not wait for a MongoDB ping.
-- A portable `Dockerfile` and `.dockerignore` exist.
-- Authentication is behind a provider-neutral boundary with two runtime modes:
-  - `internal` compatibility mode for existing binaries;
-  - `supabase` mode using Supabase Auth access tokens and internal identity mappings.
-- MongoDB contains `user_identities` with a unique `(provider, providerSubject)` mapping to an Invite user ID.
-- Supabase-managed email OTP and Google browser OAuth client flows are implemented.
-- New Supabase identities complete Invite profile/preferences onboarding through the Express API; profile data is written to MongoDB.
-- Existing-email provisioning is deliberately rejected with `ACCOUNT_LINK_REQUIRED` rather than silently linking accounts.
-- Resource-oriented paginated reads exist alongside compatibility `/v1/data`:
-  - `GET /v1/me`
-  - `GET /v1/activities?limit=&cursor=`
-  - `GET /v1/people?limit=&cursor=`
-  - `GET /v1/invitations?direction=&limit=&cursor=`
-  - `GET /v1/saved?limit=&cursor=`
-- Stable UI selectors and a manual Android/Maestro compatibility E2E workflow exist.
-
-### External configuration still required
-
-- Configure the Supabase email template to display `{{ .Token }}` so the app receives a six-digit OTP rather than only a magic link.
-- Configure Google OAuth in Google Cloud and Supabase Auth.
-- Add Supabase public client variables to managed Expo/GitHub builds.
-- Use an isolated API/database for automated managed-auth E2E.
-- Configure Cloudflare R2 when first-party image upload is implemented.
-- Configure Apple sign-in before iOS production if it becomes a product requirement.
-
-See [SUPABASE_AUTH_SETUP.md](./SUPABASE_AUTH_SETUP.md) for exact configuration and rollout details.
-
-## Current runtime paths
-
-```mermaid
-flowchart TD
-  Screens[Expo Router screens] --> Context[AppProvider]
-  Context --> Domain[validation / matching / reducer]
-  Context --> API[Express API]
-  API --> Auth{AUTH_MODE}
-  Auth -->|internal| Legacy[Invite JWT + password compatibility]
-  Auth -->|supabase| Managed[Supabase Auth session validation]
-  API --> DB[(MongoDB Atlas)]
+```text
+AUTH_MODE=internal   # compatibility for existing binaries
+AUTH_MODE=firebase   # target managed identity mode
 ```
 
-A legacy direct-Supabase data adapter still exists in the client for historical compatibility, but it is **not** the target production data architecture. When `EXPO_PUBLIC_API_URL` is configured, the Mongo-backed Invite API path takes precedence.
+A Firebase-enabled client activates only when `EXPO_PUBLIC_API_URL` and complete Firebase public client configuration are present. This prevents the default compatibility preview from sending Firebase tokens to an internal-auth API.
 
-## Authentication and authorization
+## Firebase request flow
 
-Authentication answers **who the caller is**. Authorization answers **what that caller may do in Invite**.
+```mermaid
+sequenceDiagram
+  participant App as Expo app
+  participant Firebase as Firebase Auth
+  participant API as Invite API
+  participant Google as Google signing keys
+  participant DB as MongoDB
 
-Target authentication methods:
+  App->>Firebase: email/password or Google sign-in
+  Firebase-->>App: Firebase user + ID token
+  App->>API: HTTPS + Bearer <Firebase ID token>
+  API->>Google: fetch/cache public signing certificates as needed
+  API->>API: verify RS256, kid, aud, iss, exp, iat, auth_time
+  API->>DB: resolve (firebase, Firebase UID) -> Invite user ID
+  API->>DB: execute authorized domain operation
+  DB-->>API: result
+  API-->>App: response
+```
 
-1. email one-time code;
-2. Google;
-3. Apple later if required for iOS production.
+The server validates Firebase ID tokens without a Firebase Admin service-account key. It pins `aud` to `invite-someone-app`, pins the issuer to `https://securetoken.google.com/invite-someone-app`, and caches Google's public certificates according to their cache headers.
 
-The Invite API continues to enforce rules such as:
+## Internal identity mapping
 
-- only an activity host can send invitations;
-- only the invitation receiver can accept or decline;
-- only the sender can cancel a pending invitation;
-- invite-only activities stay hidden from unrelated users;
-- a member can update only their own profile;
-- final-slot capacity is enforced atomically on the server.
-
-### Internal identity mapping
-
-Supabase's user UUID is mapped to a stable Invite user ID.
+MongoDB stores a stable mapping:
 
 ```text
 user_identities
   _id
   userId
-  provider            # supabase
-  providerSubject     # Supabase Auth user UUID
+  provider            # firebase
+  providerSubject     # Firebase UID
   email
   emailVerified
   createdAt
@@ -150,85 +115,51 @@ invitation.receiverId -> Invite user ID
 saved.userId          -> Invite user ID
 ```
 
-This keeps the identity provider replaceable and prevents authentication-provider identifiers from leaking throughout the domain model.
+Historical provider values such as `clerk` or `supabase` may remain in old isolated/test data, but the target provider is `firebase`.
 
-### Request flow in Supabase mode
+## Registration, verification and provisioning
 
-```mermaid
-sequenceDiagram
-  participant App as Expo app
-  participant Auth as Supabase Auth
-  participant API as Invite API
-  participant DB as MongoDB
+Email registration uses Firebase email/password. Firebase sends the verification email and password-reset email; Invite never stores or sees the Firebase password.
 
-  App->>Auth: email OTP or Google sign-in
-  Auth-->>App: access + refresh session
-  App->>API: HTTPS + bearer access token
-  API->>Auth: validate token / fetch authenticated user
-  Auth-->>API: verified user UUID + email
-  API->>DB: resolve provider subject to Invite user
-  API->>DB: execute authorized domain operation
-  DB-->>API: result
-  API-->>App: response
-```
+A successfully authenticated Firebase identity is not automatically an Invite member. Provisioning requires a verified email:
 
-The current server validates each Supabase bearer token against Supabase Auth's authenticated-user endpoint. This is simple and signing-key agnostic for the migration. A future optimization may validate asymmetric JWTs locally against cached Supabase JWKS after measuring whether the extra network hop matters.
-
-No Supabase service-role key is required for this request path.
-
-## New-user provisioning and account linking
-
-A successfully authenticated Supabase identity is not automatically an Invite member.
-
-For a new identity:
-
-1. Supabase verifies the email/social identity.
-2. Invite asks for display name, city, interests, availability and connection goals.
-3. The API verifies the Supabase access token again.
-4. The API checks for an existing `(supabase, subject)` mapping.
-5. The API requires a verified email.
-6. If an existing Invite member already has that email, the API returns `ACCOUNT_LINK_REQUIRED`.
+1. Firebase authenticates the user.
+2. Email/password users verify their email; Google identities normally arrive with a verified email claim.
+3. Invite asks for display name, city, interests, availability and connection goals.
+4. The API validates the Firebase ID token again.
+5. The API checks for an existing `(firebase, uid)` mapping.
+6. If an existing Invite member already uses the email but no Firebase mapping exists, the API returns `ACCOUNT_LINK_REQUIRED`.
 7. Otherwise, the API creates the Invite member and identity mapping in one MongoDB transaction.
 
-Matching an email string alone is not sufficient proof for account migration. A future legacy-account linking flow must require recent proof of control of both the old Invite account and the Supabase identity.
+Email equality alone is never used as proof for legacy account migration. A future linking flow must require recent proof of control of both identities.
 
-## API design
+## Authorization
 
-### Stateless requests
+Authentication answers **who the caller is**. The Invite API still decides **what that caller may do**.
 
-```text
-request
-  -> validate identity
-  -> resolve Invite user
-  -> validate input
-  -> authorize domain operation
-  -> query/update MongoDB
-  -> return response
-```
+Examples of server-enforced rules:
 
-No important user or domain state exists only in process memory.
+- only an activity host can send invitations;
+- only the receiver can accept or decline an invitation;
+- only the sender can cancel a pending invitation;
+- invite-only activities stay hidden from unrelated users;
+- a member can update only their own profile;
+- final-slot capacity is enforced atomically;
+- invitation acceptance and attendee insertion commit together in a MongoDB transaction.
 
-### Resource-oriented reads
+Client permission checks improve UX but never replace these server rules.
 
-The original `/v1/data` endpoint remains temporarily for binary compatibility. New code should migrate screen-by-screen toward smaller endpoints. List endpoints use bounded page sizes and opaque cursor pagination.
+## API and MongoDB
 
-### Writes and concurrency
+Resource-oriented reads coexist temporarily with compatibility `/v1/data`:
 
-Invitation/capacity transactional correctness remains authoritative. For invitation acceptance:
+- `GET /v1/me`
+- `GET /v1/activities?limit=&cursor=`
+- `GET /v1/people?limit=&cursor=`
+- `GET /v1/invitations?direction=&limit=&cursor=`
+- `GET /v1/saved?limit=&cursor=`
 
-1. authenticate and resolve the Invite user;
-2. verify the caller is the invitation receiver;
-3. begin a MongoDB transaction;
-4. atomically add the receiver only if capacity remains;
-5. mark the invitation accepted;
-6. commit both changes together;
-7. update client state only after server success.
-
-Automatic retries for writes require idempotency semantics first.
-
-## MongoDB architecture
-
-Default small-instance connection settings:
+Default MongoDB pool settings remain scale-to-zero friendly:
 
 ```text
 maxPoolSize = 5
@@ -236,101 +167,91 @@ minPoolSize = 0
 maxIdleTimeMS = 30000
 ```
 
-Startup and maintenance are separated:
+Startup does not ping, seed, or rebuild indexes. Maintenance is explicit:
 
-```text
-API startup
-  -> load configuration
-  -> start HTTP server
-  -> connect to MongoDB lazily on first database request
-
-maintenance
-  -> npm run server:indexes
-  -> npm run server:seed
+```bash
+npm run server:indexes
+npm run server:seed
 ```
 
-A cold-started container does not reseed data or recreate indexes.
+## Client session and state
 
-## Media architecture
+- Firebase Auth persistence uses AsyncStorage on React Native.
+- The Firebase bridge listens for ID-token changes.
+- `user.getIdToken()` feeds the existing Invite API token-provider abstraction, allowing Firebase to refresh tokens normally.
+- Invite domain data is reloaded after identity/provisioning changes.
+- Signing out of Invite also signs out of Firebase.
+- A historical direct-Supabase data adapter remains as compatibility code when the Mongo API is not configured; it is not the target auth or production-data architecture.
 
-Cloudflare R2 is planned, not active. The intended upload path is direct-to-object-storage through API-issued upload authorization; the API should not proxy multi-megabyte image bodies unless required for a specific security reason.
+## Google sign-in
 
-## Client state and caching
+The current implementation uses Expo AuthSession to obtain a Google ID token and then creates a Firebase credential. Google UI is feature-gated by public per-platform OAuth client IDs. No OAuth client secret belongs in the app.
 
-- Supabase Auth session material is persisted by the Supabase client storage adapter.
-- The access token is supplied to the existing Mongo API adapter through a managed token-provider boundary.
-- AsyncStorage may cache non-sensitive application data.
-- The API remains authoritative for writes.
-- Client permission checks improve UX but never replace server authorization.
-- The current global `AppProvider` is acceptable for the MVP; migrate growing paginated server state toward a query/cache layer rather than permanent global context expansion.
+A future release can adopt `@react-native-google-signin/google-signin` if native Google UI materially improves UX enough to justify additional native configuration.
 
-## Deployment architecture
-
-Today:
+## Deployment and environment separation
 
 ```text
-Expo app -> Render API -> MongoDB Atlas
-       \-> Supabase Auth
+Expo app -> Firebase Authentication
+        \-> Render Invite API -> MongoDB Atlas
 ```
-
-The API remains a normal Node/Express service with a provider-neutral Docker image. Render is suitable for development/private beta; Cloud Run remains an optional later target.
-
-## Environment separation
 
 | Environment | Identity | API | MongoDB | Purpose |
 | --- | --- | --- | --- | --- |
-| development | Supabase development project | dev API | isolated dev DB | developer iteration |
-| E2E | Supabase test/development identity | isolated E2E API | isolated E2E DB | emulator/API tests |
-| production | production Supabase configuration | production API | production DB | real users |
+| development | Firebase dev project/config | isolated dev API | isolated dev DB | developer iteration |
+| E2E | Firebase test identities/config | isolated E2E API | isolated E2E DB | emulator/API tests |
+| production | production Firebase config | production API | production DB | real users |
 
 Automated E2E must never target production identity plus production data.
+
+The existing production/internal-auth API is deliberately left unchanged until a Firebase-enabled production client is ready. The isolated auth-development Render service can use `AUTH_MODE=firebase` first.
 
 ## Repository direction
 
 ```text
 src/
   app/                  routes/screens
-  auth/                 managed identity bridge
+  auth/                 Firebase -> Invite session bridge
   components/           reusable UI
-  data/                 API/session adapters
-  domain/               pure business rules
-  state/                application orchestration
-  types/                domain contracts
-  __tests__/            unit/domain tests
+  data/                  Firebase/API/session adapters
+  domain/                pure business rules
+  state/                 application orchestration
+  types/                 domain contracts
+  __tests__/              unit/domain tests
 
 server/src/
-  auth.ts               provider-neutral authentication boundary
-  config.ts             runtime configuration
-  database.ts           Mongo connection and collection contracts
-  identity-router.ts    external identity -> Invite provisioning
-  resource-router.ts    paginated read API
-  app.ts                compatibility routes + domain mutations
-  indexes.ts            explicit index maintenance
-  seed.ts               development/test seed
+  auth.ts                internal/Firebase verification boundary
+  config.ts              runtime configuration
+  database.ts            Mongo connection and collection contracts
+  identity-router.ts     Firebase identity -> Invite provisioning
+  resource-router.ts     paginated read API
+  app.ts                 compatibility routes + domain mutations
+  indexes.ts             explicit index maintenance
+  seed.ts                development/test seed
 
 docs/
   ARCHITECTURE.md
-  SUPABASE_AUTH_SETUP.md
+  FIREBASE_AUTH_SETUP.md
   TESTING.md
 ```
 
 ## Non-goals
 
-The current stage does not require Kubernetes, microservices, Kafka, mandatory Redis, a separate worker, persistent WebSocket infrastructure, a custom authentication platform, or migration of Invite domain data to Supabase Postgres.
+The current stage does not require Kubernetes, microservices, Kafka, mandatory Redis, a separate worker, persistent WebSockets, migration of Invite data to Firebase databases, or Firebase Admin credentials merely to verify ID tokens.
 
 ## Migration sequence
 
-1. **Implemented:** architecture and trust-boundary documentation.
-2. **Implemented:** Dockerized, scale-to-zero-friendly Express/MongoDB API.
-3. **Implemented:** paginated resource endpoint foundation while preserving `/v1/data` compatibility.
-4. **Implemented:** provider-neutral internal identity mapping.
-5. **Implemented:** Supabase Auth client bridge, email OTP UI, Google browser OAuth and profile provisioning path.
-6. **In progress:** validate the Supabase-enabled isolated Render/MongoDB environment and configure hosted email OTP template.
-7. **Next:** configure Google provider and managed build variables.
-8. **Next:** add real Supabase-authenticated API/device tests against isolated infrastructure.
-9. **Then:** implement explicit legacy account linking/migration and a safe production cutover window.
-10. **Then:** migrate screens from bootstrap `/v1/data` state toward paginated reads/cache.
-11. **Then:** retire Invite password hashes/JWT issuance after legacy clients are no longer supported.
-12. **Then:** add R2 direct uploads when first-party media upload ships.
+1. **Implemented:** Express/MongoDB API and transactional domain boundary.
+2. **Implemented:** provider-neutral internal Invite identity mapping.
+3. **Implemented:** Firebase JS client bridge with persisted sessions.
+4. **Implemented:** Firebase email/password registration, verification, password reset, and sign-in UI.
+5. **Implemented:** Google OAuth integration path, gated on platform OAuth client IDs.
+6. **Implemented:** Firebase ID-token verification using Google's public certificates; no service-account key.
+7. **In progress:** validate the isolated Firebase-enabled Render/MongoDB environment.
+8. **Next:** configure Google client IDs and run provider/device smoke tests.
+9. **Next:** add real Firebase-authenticated API/device integration tests against isolated infrastructure.
+10. **Then:** implement explicit legacy account linking and a safe production cutover window.
+11. **Then:** retire Invite password hashes/JWT issuance after legacy clients are unsupported.
+12. **Then:** add R2 direct uploads when first-party media ships.
 
-See [TESTING.md](./TESTING.md) for validation and E2E requirements.
+See [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md) and [TESTING.md](./TESTING.md).
