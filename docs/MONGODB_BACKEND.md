@@ -2,7 +2,9 @@
 
 ## Why the mobile app uses an API
 
-The MongoDB connection string is a server credential. Android APK and iPhone IPA bundles can be inspected, so placing `MONGODB_URI` in Expo code would give every installer the database password. The phone receives only `EXPO_PUBLIC_API_URL`; the Express API owns database access, authentication, authorization, validation, and concurrency rules.
+The MongoDB connection string is a server credential. Android APK and iPhone IPA bundles can be inspected, so placing `MONGODB_URI` in Expo code would expose the database password.
+
+The phone talks only to the Invite Express API. In the target architecture, Supabase Auth proves identity while the API owns authorization/business rules and MongoDB stores Invite application data.
 
 ## Configure the server
 
@@ -10,19 +12,42 @@ The MongoDB connection string is a server credential. Android APK and iPhone IPA
 cp server/.env.example .env.server
 ```
 
-| Variable          | Required in production | Purpose                                   |
-| ----------------- | ---------------------- | ----------------------------------------- |
-| `MONGODB_URI`     | Yes                    | Atlas/self-hosted connection string       |
-| `MONGODB_DB_NAME` | Yes                    | Database name, normally `invite_someone`  |
-| `JWT_SECRET`      | Yes                    | 32+ character access-token signing secret |
-| `PORT`            | No                     | HTTP port, defaults to `4000`             |
-| `CORS_ORIGINS`    | Recommended            | Comma-separated browser origins or `*`    |
+Core variables:
 
-The committed fallback URI is local development access only. `.env.server` is ignored by Git. Do not prefix server secrets with `EXPO_PUBLIC_`, paste them into GitHub Actions, or commit them.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `MONGODB_URI` | yes | Atlas/self-hosted connection string |
+| `MONGODB_DB_NAME` | yes | Invite application database |
+| `AUTH_MODE` | yes in managed environments | `internal` or `supabase` |
+| `SUPABASE_URL` | when `AUTH_MODE=supabase` | Supabase project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | when `AUTH_MODE=supabase` | public project key used with the caller token for Auth validation |
+| `JWT_SECRET` | internal mode only | signs compatibility Invite JWTs |
+| `PORT` | no | defaults to `4000` |
+| `CORS_ORIGINS` | recommended | comma-separated browser origins or `*` |
 
-Use a MongoDB deployment that supports transactions. Atlas replica sets do; a standalone local `mongod` should be converted to a single-node replica set for the invitation-acceptance integration test. The API creates its unique, lookup, and geospatial indexes on startup and reuses one pooled `MongoClient`, following the official [MongoClient connection guidance](https://www.mongodb.com/docs/drivers/node/current/connect/mongoclient/) and [transaction API](https://www.mongodb.com/docs/drivers/node/current/crud/transactions/).
+Never prefix MongoDB credentials or another server secret with `EXPO_PUBLIC_`.
 
-## Run and seed
+The current Supabase-auth server path does not require a Supabase service-role key.
+
+## MongoDB requirements
+
+Use a deployment that supports transactions. Atlas replica sets do; a standalone local `mongod` should be converted to a single-node replica set before testing invitation-acceptance concurrency.
+
+The API opens MongoDB lazily and reuses one pooled `MongoClient` with a small scale-to-zero-friendly pool. Index maintenance is explicit rather than repeated at each cold start:
+
+```bash
+npm run server:indexes
+```
+
+Seeding also ensures required indexes before inserting fictional development records:
+
+```bash
+npm run server:seed
+```
+
+## Run locally
+
+For internal-auth compatibility development:
 
 ```bash
 npm ci
@@ -31,57 +56,80 @@ npm run server:dev
 curl http://localhost:4000/health
 ```
 
-Seeding is intentionally non-destructive: it refuses to run when any application collection already contains data. The fictional review login is `demo@invite.app` / `invite-demo`.
+For Supabase Auth development, configure `.env.server` with `AUTH_MODE=supabase`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the isolated MongoDB URI/database. Then start the same Express server.
 
-## Deploy the free Render API
+See [SUPABASE_AUTH_SETUP.md](./SUPABASE_AUTH_SETUP.md) for the client and provider configuration.
 
-The root `render.yaml` defines a free Node web service in Render's Virginia region, close to the Atlas `US_EAST_1` deployment. It installs with `npm ci`, starts with `npm run server:start`, checks `/health`, and runs `npm run server:seed` only after the first successful deployment.
+## Render deployment
 
-Keep `MONGODB_URI` in Render's encrypted environment settings. The Blueprint marks it with `sync: false`, so the credential is never committed. Render generates `JWT_SECRET`; `MONGODB_DB_NAME` remains `invite_someone`.
+Keep `MONGODB_URI` in Render's environment settings. Do not commit it or copy it into Expo build variables.
 
-After creating the service:
+For a Supabase-enabled service configure:
 
-1. retrieve the service's shared outbound CIDR ranges and add only those ranges to the Atlas IP access list;
-2. wait for `/health` to return `{ "status": "ok" }`;
-3. verify the demo login and authenticated `/v1/data` response;
-4. keep the workflow's live Render URL or set the GitHub Actions variable `INVITE_API_URL` to override it, without a trailing slash;
-5. rebuild the phone binaries because `EXPO_PUBLIC_API_URL` is embedded at build time.
+```bash
+NODE_ENV=production
+AUTH_MODE=supabase
+MONGODB_URI=mongodb+srv://...
+MONGODB_DB_NAME=invite_auth_dev
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+CORS_ORIGINS=*
+```
 
-Render free services sleep after inactivity, so the first request after a quiet period can take longer. The mobile client uses a bounded request timeout and provides a retryable connection message.
+`SUPABASE_URL` and the publishable key are not secrets, but they belong in the API environment so token validation is explicitly tied to the intended Supabase project.
+
+After creating a new environment:
+
+1. allow only the deployment's required outbound network ranges in Atlas;
+2. create/verify indexes with `npm run server:indexes` or equivalent maintenance;
+3. verify `/health`;
+4. test an authenticated request through the real identity boundary;
+5. rebuild the phone binary when changing `EXPO_PUBLIC_API_URL` or Supabase public client configuration.
+
+Free services may sleep after inactivity, so the first request after a quiet period can be slower.
 
 ## Connect a development client
 
-Create a local `.env`:
+Compatibility/internal mode only needs:
 
 ```bash
 EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
 ```
 
-`127.0.0.1` works for the iOS simulator and web. Android emulators commonly reach the host as `10.0.2.2`; physical devices need a reachable LAN URL for development. Installable release builds should use a deployed HTTPS endpoint.
+A managed-auth client uses:
 
-## Build connected phone binaries
+```bash
+EXPO_PUBLIC_API_URL=https://your-supabase-enabled-invite-api.example
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
 
-Set `EXPO_PUBLIC_API_URL` in the environment that runs Expo prebuild/EAS. The repository's GitHub Android workflow defaults to `https://invite-someone-api.onrender.com`; a repository Actions variable named `INVITE_API_URL` can override it. For EAS, configure the corresponding build environment variable. A public API URL is not a secret, but it must point to a running server.
-
-Changing the URL requires a new binary. MongoDB credentials can be rotated or changed on the server without rebuilding the app.
+Android emulators commonly reach a host machine as `10.0.2.2`; physical devices need a reachable LAN/HTTPS development endpoint.
 
 ## Collections and guarantees
 
-- `members`: private email/password hash plus a nested public profile and coarse GeoJSON centroid;
-- `activities`: host, content, visibility, capacity, attendee IDs, and timing;
+- `members`: private member record plus nested Invite profile and coarse GeoJSON location;
+- `user_identities`: external provider subject -> stable internal Invite user ID;
+- `activities`: host, content, visibility, capacity, attendee IDs and timing;
 - `invitations`: sender/receiver lifecycle with a concurrency-safe active key;
 - `saved_activities`: private per-member bookmarks.
 
-Passwords use bcrypt. JWTs expire after 30 days and are stored with Expo SecureStore on native devices. API reads omit other members’ email addresses. Community joining uses one atomic activity update. Accepting an invitation updates attendance and invitation state in one MongoDB transaction so a full activity cannot produce a false acceptance.
+In `AUTH_MODE=supabase`, Supabase access tokens authenticate the caller, but authorization is still performed by the Invite API after resolving the internal Invite user ID.
+
+The compatibility `members.passwordHash` field remains while old internal-auth clients are supported. Supabase-provisioned users receive an unusable random compatibility hash; they do not authenticate with that field.
+
+API reads omit other members' email/auth data. Community joining uses an atomic activity update. Invitation acceptance updates attendance and invitation state in one MongoDB transaction so a full activity cannot produce a false acceptance.
 
 ## Production checklist
 
 Before public use:
 
 1. restrict Atlas network access to the API deployment;
-2. use TLS/HTTPS on both API and MongoDB connections;
-3. replace the development JWT secret and establish rotation/revocation procedures;
-4. add managed backups, monitoring, request/audit logs with redaction, and alerting;
-5. run authorization and final-capacity concurrency tests against a staging replica set;
-6. add report/block/moderation and account export/deletion operations;
-7. replace URL-based profile photos with moderated object-storage uploads and signed transformations.
+2. use TLS/HTTPS for API and MongoDB connections;
+3. use isolated development/E2E/production databases;
+4. verify Supabase Auth provider configuration and account-linking behavior;
+5. add backups, monitoring, redacted request/audit logs and alerting;
+6. run authorization and final-capacity concurrency tests against staging;
+7. add report/block/moderation and account export/deletion operations;
+8. retire compatibility password/JWT auth only after legacy clients are no longer supported;
+9. replace URL-based profile photos with moderated object-storage uploads when first-party media ships.
