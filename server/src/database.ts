@@ -12,7 +12,7 @@ export interface MemberDocument extends Document {
   _id: string;
   email: string;
   emailNormalized: string;
-  /** Internal-auth compatibility credential. Clerk-provisioned users receive an unusable random hash. */
+  /** Internal-auth compatibility credential. Managed-identity users receive an unusable random hash. */
   passwordHash: string;
   profile: Omit<Profile, 'email'>;
   mapPoint?: GeoPoint;
@@ -23,7 +23,7 @@ export interface MemberDocument extends Document {
 export interface UserIdentityDocument extends Document {
   _id: string;
   userId: string;
-  provider: 'clerk';
+  provider: 'clerk' | 'supabase';
   providerSubject: string;
   email?: string;
   emailVerified?: boolean;
