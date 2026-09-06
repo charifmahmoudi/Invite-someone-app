@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "367720887571",
+    "project_id": "invite-someone-app",
+    "storage_bucket": "invite-someone-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:367720887571:android:f287489ab6b3b41de816e6",
+        "android_client_info": {
+          "package_name": "com.charifmahmoudi.invite"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "367720887571-146t2h6ub1vips2mqjjih7ivajg80ar3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPFu8Z0-wt_ZnY4z0jeVb_3Quk6MpLaLc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "367720887571-146t2h6ub1vips2mqjjih7ivajg80ar3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
