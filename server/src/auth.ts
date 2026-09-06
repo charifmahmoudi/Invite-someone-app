@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { jwtVerify, SignJWT } from 'jose';
+import { decodeProtectedHeader, importX509, jwtVerify, SignJWT } from 'jose';
 
 import { config } from './config';
 import { getCollections } from './database';
@@ -7,48 +7,87 @@ import { getCollections } from './database';
 const jwtKey = new TextEncoder().encode(config.jwtSecret);
 const internalIssuer = 'invite-someone-api';
 const internalAudience = 'invite-someone-mobile';
+const firebaseCertsUrl =
+  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
 export interface AuthIdentity {
-  provider: 'internal' | 'supabase';
+  provider: 'internal' | 'firebase';
   subject: string;
   email?: string;
   emailVerified?: boolean;
 }
 
-interface SupabaseUser {
-  id?: string;
-  email?: string;
-  email_confirmed_at?: string | null;
-  confirmed_at?: string | null;
+interface FirebaseCertCache {
+  certificates: Record<string, string>;
+  expiresAt: number;
 }
 
-const verifySupabaseToken = async (token: string): Promise<AuthIdentity> => {
-  if (!config.supabaseUrl || !config.supabasePublishableKey) {
-    throw new Error('Supabase authentication is not configured.');
+let firebaseCertCache: FirebaseCertCache | undefined;
+
+const loadFirebaseCertificates = async (force = false) => {
+  if (!force && firebaseCertCache && firebaseCertCache.expiresAt > Date.now() + 5_000) {
+    return firebaseCertCache.certificates;
   }
 
-  const result = await fetch(`${config.supabaseUrl}/auth/v1/user`, {
-    headers: {
-      apikey: config.supabasePublishableKey,
-      Authorization: `Bearer ${token}`,
-    },
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!result.ok) throw new Error(`Supabase token validation failed with status ${result.status}.`);
+  const response = await fetch(firebaseCertsUrl, { signal: AbortSignal.timeout(8_000) });
+  if (!response.ok) {
+    throw new Error(`Firebase signing-key lookup failed with status ${response.status}.`);
+  }
 
-  const user = (await result.json()) as SupabaseUser;
-  if (!user.id) throw new Error('Missing Supabase user ID.');
+  const certificates = (await response.json()) as Record<string, string>;
+  const cacheControl = response.headers.get('cache-control') ?? '';
+  const maxAgeSeconds = Number(/max-age=(\d+)/i.exec(cacheControl)?.[1] ?? 3600);
+  firebaseCertCache = {
+    certificates,
+    expiresAt: Date.now() + Math.max(maxAgeSeconds, 60) * 1_000,
+  };
+  return certificates;
+};
+
+const verifyFirebaseToken = async (token: string): Promise<AuthIdentity> => {
+  const projectId = config.firebaseProjectId;
+  if (!projectId) throw new Error('Firebase authentication is not configured.');
+
+  const header = decodeProtectedHeader(token);
+  if (header.alg !== 'RS256' || !header.kid) {
+    throw new Error('Invalid Firebase ID-token header.');
+  }
+
+  let certificates = await loadFirebaseCertificates();
+  let certificate = certificates[header.kid];
+  if (!certificate) {
+    certificates = await loadFirebaseCertificates(true);
+    certificate = certificates[header.kid];
+  }
+  if (!certificate) throw new Error('Firebase signing key is unknown.');
+
+  const key = await importX509(certificate, 'RS256');
+  const { payload } = await jwtVerify(token, key, {
+    algorithms: ['RS256'],
+    audience: projectId,
+    issuer: `https://securetoken.google.com/${projectId}`,
+    clockTolerance: 60,
+  });
+
+  const now = Math.floor(Date.now() / 1_000);
+  if (!payload.sub) throw new Error('Missing Firebase user ID.');
+  if (typeof payload.iat !== 'number' || payload.iat > now + 60) {
+    throw new Error('Invalid Firebase issued-at time.');
+  }
+  if (typeof payload.auth_time !== 'number' || payload.auth_time > now + 60) {
+    throw new Error('Invalid Firebase authentication time.');
+  }
 
   return {
-    provider: 'supabase',
-    subject: user.id,
-    email: user.email,
-    emailVerified: Boolean(user.email && (user.email_confirmed_at || user.confirmed_at)),
+    provider: 'firebase',
+    subject: payload.sub,
+    email: typeof payload.email === 'string' ? payload.email : undefined,
+    emailVerified: payload.email_verified === true,
   };
 };
 
 const verifyIdentityToken = async (token: string): Promise<AuthIdentity> => {
-  if (config.authMode === 'supabase') return verifySupabaseToken(token);
+  if (config.authMode === 'firebase') return verifyFirebaseToken(token);
 
   const { payload } = await jwtVerify(token, jwtKey, {
     issuer: internalIssuer,
@@ -118,7 +157,7 @@ export const requireAuthentication = async (
 
   const { userIdentities } = await getCollections();
   const mapping = await userIdentities.findOne({
-    provider: 'supabase',
+    provider: 'firebase',
     providerSubject: identity.subject,
   });
   if (!mapping) {
