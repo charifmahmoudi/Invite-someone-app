@@ -11,7 +11,7 @@ Invite uses multiple test layers because no single layer can prove product behav
              │ Maestro + emulator │
              ├────────────────────┤
              │ API integration    │
-             │ auth + Mongo       │
+             │ Firebase + Mongo   │
              ├────────────────────┤
              │ Component tests    │
              │ critical UI states │
@@ -25,7 +25,7 @@ Invite uses multiple test layers because no single layer can prove product behav
                  many, very fast
 ```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for application trust boundaries and [SUPABASE_AUTH_SETUP.md](./SUPABASE_AUTH_SETUP.md) for identity configuration.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for trust boundaries and [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md) for identity configuration.
 
 ## Current CI gates
 
@@ -33,13 +33,11 @@ The `CI` workflow runs:
 
 1. `npm ci`;
 2. strict application and server TypeScript compilation;
-3. ESLint;
-4. Jest domain/user-story tests with configured coverage;
-5. a production Expo web export.
+3. ESLint/React Compiler checks;
+4. Jest domain/user-story tests with coverage;
+5. production Expo web export.
 
 It runs on `main`, pull requests, `impl/**` staging branches and manual dispatch.
-
-Run the fast gates locally with:
 
 ```bash
 npm run typecheck
@@ -57,18 +55,19 @@ The mobile preview workflow independently builds the Android release variant, ve
 - `profile-discovery.test.ts` verifies discovery filters, approximate distance calculations and bounded map projection.
 - `app-reducer.test.ts` covers activity creation, invitations, acceptance, decline, public joining, duplicate prevention and saved activities.
 
-These fast tests do not prove API authorization or MongoDB concurrency behavior.
+These fast tests do not prove Firebase token verification, API authorization or MongoDB concurrency behavior.
 
 ## API integration layer
 
-Before public production release, CI should run the server against an isolated MongoDB environment that supports transactions. Required scenarios include:
+Before public production release, CI should run the server against an isolated MongoDB environment that supports transactions. Required Firebase scenarios include:
 
 - unauthenticated protected requests fail;
-- invalid/expired Supabase access tokens fail;
-- a valid Supabase identity resolves only to its mapped Invite user;
-- an unmapped Supabase identity receives `INVITE_PROFILE_REQUIRED` on member resources;
-- external identity provisioning requires a verified email;
-- an external identity cannot silently claim an existing Invite account by matching email;
+- malformed, expired, wrong-audience and wrong-issuer Firebase ID tokens fail;
+- an ID token signed by an unknown Firebase key ID fails;
+- a valid Firebase UID resolves only to its mapped Invite user;
+- an unmapped Firebase UID receives `INVITE_PROFILE_REQUIRED` on member resources;
+- provisioning requires a verified email claim;
+- a Firebase identity cannot silently claim an existing Invite account by matching email;
 - a member cannot update another profile;
 - invite-only activities are hidden from unrelated members;
 - only a host can send invitations;
@@ -79,11 +78,9 @@ Before public production release, CI should run the server against an isolated M
 - public profiles do not leak email/auth fields;
 - geospatial queries respect their maximum distance.
 
-This integration suite is still to be implemented.
+The full integration suite is still to be implemented.
 
 ## Device E2E architecture
-
-Target environment:
 
 ```text
 GitHub Actions
@@ -94,7 +91,7 @@ Android emulator
       v
 Invite E2E APK
       |
-      +------> Supabase Auth test/development project
+      +------> Firebase Authentication test/development project
       |
       v
 Invite E2E API
@@ -114,104 +111,73 @@ The repository contains:
 .github/workflows/e2e-android.yml
 ```
 
-The manual Android workflow requires an explicit E2E API, refuses the known production/demo API, builds and installs a release APK, runs Maestro, and uploads available evidence.
-
-The current workflow still uses the seeded internal compatibility account:
+The current manual workflow still uses the seeded internal compatibility account:
 
 ```text
 demo@invite.app
 invite-demo
 ```
 
-This is transitional and remains manual-only.
+It requires an explicit isolated API and refuses the known production/demo API. This remains a build/device compatibility smoke until the Firebase test harness is added.
 
-## Supabase Auth E2E strategy
+## Firebase Auth E2E strategy
 
-Do not add an Invite authentication bypass or magic OTP.
+Do not add an Invite authentication bypass or hard-coded production login.
 
-Hosted Supabase Auth email OTP should be exercised through the real Supabase boundary. Unlike the previous Clerk plan, there is no Invite-owned deterministic `424242` code. Reliable CI therefore needs one of these isolated strategies:
+Firebase's Auth Emulator is the preferred deterministic automation target for Firebase-specific registration/email-verification behavior when practical. Hosted Firebase should still receive targeted release smoke tests because hosted configuration, authorized domains and Google OAuth are external dependencies that an emulator cannot prove.
 
-- a test mailbox/inbox API that CI can read after requesting the OTP;
-- a dedicated self-hosted/local Supabase Auth test environment with controlled mail delivery;
-- another provider-supported test harness that still issues normal Supabase sessions.
+For hosted email/password E2E, use dedicated non-production Firebase users and an isolated Invite API/database. Email verification can be tested through an emulator or controlled test mailbox; do not weaken the API's `emailVerified=true` provisioning requirement merely to simplify CI.
 
-Until one of those is implemented, retain the internal-auth smoke as a compatibility build test and perform hosted Supabase OTP as a targeted manual release smoke.
-
-Google provider UI should not be the routine CI authentication path because consent screens, bot challenges, MFA/device checks and provider changes make it brittle. Test Google as a release/provider configuration smoke after email OTP and API authorization are proven.
-
-## E2E personas and data
-
-Use ordinary isolated members such as:
-
-```text
-HOST
-  e2e-host@example.test
-  Berlin
-  coffee, hiking
-
-GUEST
-  e2e-guest@example.test
-  Berlin
-  coffee, photography
-
-THIRD
-  e2e-third@example.test
-  Potsdam
-  cycling
-```
-
-Routine runs may preserve stable external auth identities, but application-domain fixtures must be reset only in the isolated MongoDB environment.
-
-Never run a destructive reset against production.
+Google provider UI should not be the routine CI authentication path because consent screens, bot/device challenges and provider-side changes make it brittle. Test Google as a release/provider configuration smoke after email/password and API authorization are proven.
 
 ## Stable UI selectors
 
-Critical selectors include:
+Current managed-auth selectors include:
 
 ```text
 welcome-screen
 welcome-sign-in
 auth-sign-in-screen
+auth-registration
 auth-email
-auth-password          # compatibility path only
+auth-password
 auth-submit
-auth-code
-auth-verify-code
 auth-google
 auth-error
+auth-email-verification
+auth-check-verification
 auth-profile-onboarding
 profile-name
 profile-city
 profile-submit
 ```
 
-Use human-visible copy for assertions only when the copy itself is behavior under test.
+The legacy compatibility path intentionally reuses `auth-email`, `auth-password` and `auth-submit` so the existing Maestro smoke can remain stable during migration.
 
-## High-value E2E journeys
+## High-value managed-auth journeys
 
-After isolated Supabase-authenticated E2E is available, prioritize:
+Prioritize:
 
-1. email-code sign-in and session restoration;
-2. first-time identity profile provisioning;
-3. returning identity resolves to the same Invite user;
-4. host creates a community activity;
-5. host discovers a guest and sends an invitation;
-6. guest signs in and accepts the invitation;
-7. final-slot capacity cannot be overbooked;
-8. invite-only activity stays invisible to an unrelated third user;
-9. save/unsave persists;
-10. profile edits persist;
-11. unauthorized actions are unavailable in UI and rejected by API.
+1. email/password registration;
+2. unverified user cannot provision an Invite profile;
+3. email verification refresh unlocks onboarding;
+4. first-time Firebase identity provisions one internal Invite user;
+5. returning Firebase identity resolves to the same Invite user;
+6. password reset request succeeds without leaking whether a user exists;
+7. session restoration and ID-token refresh survive app restart/backgrounding;
+8. sign-out clears both Firebase and Invite sessions;
+9. Google sign-in creates/loads the correct Firebase identity;
+10. final-slot capacity, invitation privacy and authorization remain correct across users.
 
-A representative multi-user journey is:
+Representative multi-user journey:
 
 ```text
 reset isolated fixture
-  -> sign in HOST through Supabase Auth
+  -> sign in HOST through Firebase
   -> create activity
   -> invite GUEST
   -> sign out
-  -> sign in GUEST through Supabase Auth
+  -> sign in GUEST through Firebase
   -> accept invitation
   -> assert attendee state
 ```
@@ -221,16 +187,32 @@ reset isolated fixture
 | Value | Secret? | Location |
 | --- | --- | --- |
 | E2E API URL | no | workflow input/repository variable |
-| `EXPO_PUBLIC_SUPABASE_URL` | no | Expo/E2E build |
-| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | no, public by design | Expo/E2E build |
-| `SUPABASE_URL` | no | Invite API environment |
-| `SUPABASE_PUBLISHABLE_KEY` | no, public by design | Invite API environment |
+| Firebase Web `apiKey` | no, public client configuration | Expo/E2E build |
+| Firebase authDomain/projectId/appId/etc. | no | Expo/E2E build |
+| Google OAuth client IDs | no | Expo/E2E build |
+| Google OAuth client secret | yes; not needed by current app | never in Expo |
+| Firebase service-account private key | yes; not needed by current verifier | do not create/embed for this path |
 | E2E MongoDB URI | yes | E2E server/trusted CI only |
 | production MongoDB URI | yes | production server only |
 
-The current API design does not require a Supabase service-role secret. Never expose MongoDB credentials or any future Supabase secret/service-role key through an `EXPO_PUBLIC_*` variable.
-
 Privileged workflows must not execute untrusted fork code with repository secrets.
+
+## Firebase server verification tests
+
+The server verifier should be exercised at the JWT boundary. Test the documented Firebase constraints:
+
+```text
+header.alg == RS256
+header.kid exists in Google's Firebase signing certificates
+aud == invite-someone-app
+iss == https://securetoken.google.com/invite-someone-app
+sub is non-empty
+exp is future
+iat is not future
+auth_time is not future
+```
+
+Where unit tests need deterministic keys, inject or factor certificate retrieval rather than calling Google from every test. At least one staging smoke should validate a real Firebase-issued token end-to-end.
 
 ## Cold-start behavior
 
@@ -248,28 +230,29 @@ Device jobs should retain:
 - target environment identifier;
 - API correlation IDs once request logging is implemented.
 
-Do not print bearer tokens, MongoDB URIs or credentials to logs.
+Never print Firebase ID tokens, MongoDB URIs, passwords, OAuth secrets or private keys to logs.
 
 ## Manual release matrix
 
 | Platform | Target | Focus |
 | --- | --- | --- |
-| iOS | small supported iPhone | keyboard, wrapping, date picker, managed auth |
-| iOS | large current iPhone | safe areas, haptics, session restoration |
-| Android | compact supported device | predictive back, keyboard, Supabase auth callback |
+| iOS | small supported iPhone | keyboard, wrapping, verification links, Firebase session |
+| iOS | large current iPhone | safe areas, haptics, session restoration, Google |
+| Android | compact supported device | predictive back, keyboard, Firebase/Google callback |
 | Android | large device | responsive layout, date/time picker |
-| Web | Chrome and Safari | static routing, keyboard/focus, browser auth |
+| Web | Chrome and Safari | static routing, keyboard/focus, Firebase/Google browser auth |
 
 Repeat important flows with larger system text, reduced motion, VoiceOver/TalkBack and poor network conditions.
 
 ## Implementation sequence
 
 1. **Implemented:** fast CI static/domain/build gates.
-2. **Implemented:** stable selectors for compatibility and managed sign-in UI.
-3. **Implemented:** manual Android emulator + Maestro internal-auth compatibility smoke.
-4. **Implemented:** Supabase Auth client/API identity integration foundation.
-5. **Next:** validate isolated Supabase-enabled Render + MongoDB environment.
-6. **Next:** configure hosted Supabase email OTP template and run manual identity/provisioning smoke.
-7. **Next:** implement MongoDB-backed API integration tests.
-8. **Next:** choose an isolated OTP mailbox/test harness and replace the compatibility device smoke with a real Supabase Auth flow.
-9. **Then:** add multi-user activity/invitation E2E journeys and make the reliable subset a release gate.
+2. **Implemented:** stable selectors and internal-auth Android compatibility smoke.
+3. **Implemented:** Firebase client session bridge and email/password UI.
+4. **Implemented:** email verification and password-reset client flows.
+5. **Implemented:** Firebase ID-token verification on the Express API.
+6. **Implemented:** Google credential integration, feature-gated on public OAuth client IDs.
+7. **Next:** validate Firebase-enabled isolated Render + MongoDB environment.
+8. **Next:** add MongoDB-backed Firebase API integration tests.
+9. **Next:** add Firebase Emulator/controlled-mail E2E registration verification.
+10. **Then:** add multi-user activity/invitation E2E journeys and make the reliable subset a release gate.
