@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
+// Firebase 12.18's umbrella-package typings currently omit the React Native-only
+// getReactNativePersistence export even though Expo Metro resolves that runtime entry.
+// @ts-expect-error -- Firebase typings mismatch; remove when firebase/auth exposes the RN export to TypeScript.
 import {
   getAuth,
   getReactNativePersistence,
