@@ -63,12 +63,16 @@ The `user_identities` collection maps `provider=supabase` plus the Supabase user
 
 Email authentication is enabled by default in hosted Supabase projects, but `signInWithOtp` sends whichever content the email template defines. Invite's UI expects a six-digit code.
 
-In the Supabase Dashboard:
+For new Supabase Free-tier projects created on or after June 3, 2026, the default Supabase email provider does not allow auth-email template customization. Configure a custom SMTP provider first if the dashboard shows **Set up custom SMTP to edit templates**. Paid projects are not subject to that restriction, and older Free projects may retain previously editable templates.
 
-1. Open **Authentication -> Email Templates -> Magic Link**.
+After custom SMTP is configured:
+
+1. Open **Authentication -> Emails -> Magic link or OTP**.
 2. Change the template so the message displays `{{ .Token }}` instead of relying only on a confirmation URL.
 3. Keep email sign-in enabled.
 4. Use a reasonable OTP expiry and rate limit for the environment.
+
+Supabase documents `{{ .Token }}` as the six-digit one-time password. The default SMTP service is intended only for limited development use and, without custom SMTP, sends only to pre-authorized organization addresses with strict rate limits.
 
 The client calls `signInWithOtp` with `shouldCreateUser: true`, so the same email-code flow signs in an existing identity or creates a new Supabase identity. After successful verification, new identities complete Invite profile onboarding in MongoDB.
 
@@ -77,10 +81,10 @@ The client calls `signInWithOtp` with `shouldCreateUser: true`, so the same emai
 Google requires one-time configuration outside this repository:
 
 1. Create/configure the OAuth application in Google Cloud.
-2. Enable Google under **Supabase Dashboard -> Authentication -> Providers -> Google**.
+2. Enable Google under **Supabase Dashboard -> Authentication -> Sign In / Providers -> Google**.
 3. Register the required Google client IDs with Supabase.
 4. Add the Supabase callback URL shown by the provider configuration to Google Cloud.
-5. Add `invite://google-auth` to the Supabase Auth redirect allow list for the mobile browser flow.
+5. Add `invite://google-auth` under **Authentication -> URL Configuration** as an allowed redirect URL for the mobile browser flow.
 
 Invite currently uses Supabase browser OAuth through `expo-web-browser`, then installs the returned Supabase session. A future release may move to native Google Credential Manager / native iOS Google UI if that improves UX.
 
