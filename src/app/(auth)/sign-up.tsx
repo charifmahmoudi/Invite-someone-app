@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 
-import { isClerkConfigured, useManagedAuth } from '@/auth/clerk-provider';
+import { isSupabaseAuthConfigured, useManagedAuth } from '@/auth/supabase-provider';
 import { Button } from '@/components/ui/button';
 import { ChoiceChip } from '@/components/ui/chip';
 import { InputField } from '@/components/ui/input-field';
@@ -85,7 +85,7 @@ function PreferencesFields({
   );
 }
 
-function ClerkOnboardingScreen() {
+function SupabaseOnboardingScreen() {
   const router = useRouter();
   const { identityLoaded, identitySignedIn, refreshInviteSession } = useManagedAuth();
   const [checkingProfile, setCheckingProfile] = useState(true);
@@ -192,7 +192,7 @@ function ClerkOnboardingScreen() {
             <View style={styles.heading}>
               <Text style={styles.title}>Identity verified. Now make Invite feel like you.</Text>
               <Text style={styles.subtitle}>
-                Clerk handles sign-in; these details belong to your Invite profile and matching preferences.
+                Supabase Auth handles sign-in; these details belong to your Invite profile and matching preferences.
               </Text>
             </View>
             <View style={styles.form}>
@@ -411,7 +411,7 @@ function LegacySignUpScreen() {
 }
 
 export default function SignUpScreen() {
-  return isClerkConfigured ? <ClerkOnboardingScreen /> : <LegacySignUpScreen />;
+  return isSupabaseAuthConfigured ? <SupabaseOnboardingScreen /> : <LegacySignUpScreen />;
 }
 
 const styles = StyleSheet.create({
