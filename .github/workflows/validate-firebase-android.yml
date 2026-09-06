@@ -1,0 +1,80 @@
+name: Validate Firebase Android
+
+on:
+  push:
+    branches: ['impl/firebase-auth']
+    paths:
+      - '.github/workflows/validate-firebase-android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_API_URL: https://invite-someone-api-clerk-dev.onrender.com
+      EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: invite-someone-app.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: invite-someone-app
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: invite-someone-app.firebasestorage.app
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '367720887571'
+      EXPO_PUBLIC_FIREBASE_APP_ID: '1:367720887571:web:fa9518d2e19ac3fae816e6'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: '1'
+
+      - name: Verify generated Firebase configuration
+        run: |
+          test -f android/app/google-services.json
+          grep -Fq 'com.charifmahmoudi.invite' android/app/google-services.json
+
+      - name: Build Firebase-enabled release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Verify embedded bundle and signing certificate
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          unzip -Z1 "$APK" | grep -Fxq 'assets/index.android.bundle'
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -n "$APKSIGNER"
+          CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/.*SHA-1 digest: //p' | head -1 | tr '[:lower:]' '[:upper:]' | tr -d ':')"
+          echo "APK signing SHA-1: $CERT_SHA1"
+          test "$CERT_SHA1" = '5E8F16062EA3CD2C4A0D547876BAA6F38CABF625'
+
+      - name: Upload validation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-firebase-android-validation
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
