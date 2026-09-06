@@ -72,10 +72,11 @@ function SupabaseMongoBridge({ children }: { children: React.ReactNode }) {
   const [inviteRevision, setInviteRevision] = useState(0);
 
   useEffect(() => {
-    if (!supabase) return;
+    const client = supabase;
+    if (!client) return;
     let active = true;
 
-    void supabase.auth.getSession().then(({ data, error }) => {
+    void client.auth.getSession().then(({ data, error }) => {
       if (!active) return;
       setSession(error ? null : data.session);
       setIdentityLoaded(true);
@@ -83,7 +84,7 @@ function SupabaseMongoBridge({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
       setSession(nextSession);
       setIdentityLoaded(true);
@@ -93,19 +94,19 @@ function SupabaseMongoBridge({ children }: { children: React.ReactNode }) {
       Platform.OS === 'web'
         ? undefined
         : AppState.addEventListener('change', (nextState) => {
-            if (nextState === 'active') supabase.auth.startAutoRefresh();
-            else supabase.auth.stopAutoRefresh();
+            if (nextState === 'active') client.auth.startAutoRefresh();
+            else client.auth.stopAutoRefresh();
           });
 
     if (Platform.OS !== 'web' && AppState.currentState === 'active') {
-      supabase.auth.startAutoRefresh();
+      client.auth.startAutoRefresh();
     }
 
     return () => {
       active = false;
       subscription.unsubscribe();
       appStateSubscription?.remove();
-      if (Platform.OS !== 'web') supabase.auth.stopAutoRefresh();
+      if (Platform.OS !== 'web') client.auth.stopAutoRefresh();
     };
   }, []);
 
