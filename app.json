@@ -19,6 +19,7 @@
     "android": {
       "package": "com.charifmahmoudi.invite",
       "versionCode": 4,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#EE6548",
         "foregroundImage": "./assets/brand/adaptive-foreground.png",
@@ -46,7 +47,8 @@
         {
           "configureAndroidBackup": true
         }
-      ]
+      ],
+      "react-native-nitro-google-signin"
     ],
     "experiments": {
       "typedRoutes": true,
