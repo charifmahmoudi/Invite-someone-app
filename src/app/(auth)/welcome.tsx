@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
-import { isClerkConfigured, useManagedAuth } from '@/auth/clerk-provider';
+import { isSupabaseAuthConfigured, useManagedAuth } from '@/auth/supabase-provider';
 import { AppIcon } from '@/components/ui/app-icon';
 import { Button } from '@/components/ui/button';
 import { ScrollScreen } from '@/components/ui/screen';
@@ -45,7 +45,7 @@ export default function WelcomeScreen() {
   };
 
   const startProfile = () => {
-    router.push(isClerkConfigured ? '/(auth)/sign-in' : '/(auth)/sign-up');
+    router.push(isSupabaseAuthConfigured ? '/(auth)/sign-in' : '/(auth)/sign-up');
   };
 
   return (
