@@ -23,7 +23,7 @@ export interface MemberDocument extends Document {
 export interface UserIdentityDocument extends Document {
   _id: string;
   userId: string;
-  provider: 'clerk' | 'supabase';
+  provider: 'clerk' | 'supabase' | 'firebase';
   providerSubject: string;
   email?: string;
   emailVerified?: boolean;
