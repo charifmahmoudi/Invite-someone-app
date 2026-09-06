@@ -25,18 +25,9 @@ const provisionSchema = z.object({
 
 const normalizeEmail = (email: string) => email.trim().toLocaleLowerCase();
 const initialsFromName = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toLocaleUpperCase();
+  name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toLocaleUpperCase();
 const handleFromName = (name: string) =>
-  name
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, '')
-    .slice(0, 24) || `member${Date.now()}`;
+  name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || `member${Date.now()}`;
 
 const knownCityLocations: Record<string, { area: string; coordinates: [number, number] }> = {
   berlin: { area: 'Berlin (approximate)', coordinates: [13.405, 52.52] },
@@ -51,26 +42,26 @@ const mapPointForProfile = (profile: Profile): GeoPoint | undefined => {
 export const identityRouter = Router();
 
 /**
- * Converts an authenticated Supabase identity into an Invite user exactly once.
- * Existing email/password accounts are deliberately NOT linked by email alone;
+ * Converts an authenticated Firebase identity into an Invite user exactly once.
+ * Existing compatibility accounts are deliberately NOT linked by email alone;
  * account migration/linking needs a separate recent-authenticated flow.
  */
 identityRouter.post('/provision', requireIdentity, async (request, response) => {
-  if (config.authMode !== 'supabase') {
+  if (config.authMode !== 'firebase') {
     response.status(404).json({ message: 'External identity provisioning is not enabled.' });
     return;
   }
 
   const input = provisionSchema.parse(request.body);
   const identity = authenticatedIdentity(response);
-  if (identity.provider !== 'supabase') {
-    response.status(400).json({ message: 'A Supabase identity is required.' });
+  if (identity.provider !== 'firebase') {
+    response.status(400).json({ message: 'A Firebase identity is required.' });
     return;
   }
 
   const { members, userIdentities } = await getCollections();
   const existingIdentity = await userIdentities.findOne({
-    provider: 'supabase',
+    provider: 'firebase',
     providerSubject: identity.subject,
   });
   if (existingIdentity) {
@@ -138,8 +129,6 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
   };
   const mapPoint = mapPointForProfile(profile);
 
-  // Keep the compatibility schema valid while internal password auth still exists.
-  // This random secret is never returned and cannot be used as a real credential.
   const disabledPasswordHash = await hash(randomUUID(), 12);
   const member: MemberDocument = {
     _id: userId,
@@ -160,7 +149,7 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
         {
           _id: randomUUID(),
           userId,
-          provider: 'supabase',
+          provider: 'firebase',
           providerSubject: identity.subject,
           email,
           emailVerified: true,
@@ -173,7 +162,7 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
   } catch (error) {
     if (error instanceof MongoServerError && error.code === 11000) {
       const racedIdentity = await userIdentities.findOne({
-        provider: 'supabase',
+        provider: 'firebase',
         providerSubject: identity.subject,
       });
       if (racedIdentity) {
