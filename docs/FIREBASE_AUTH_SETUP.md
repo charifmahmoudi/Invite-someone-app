@@ -29,7 +29,7 @@ Firebase owns email/password credentials, verification emails, password resets, 
 Under **Authentication -> Sign-in method**:
 
 1. enable **Email/Password**;
-2. enable **Google** when its Google-side setup is ready;
+2. enable **Google**;
 3. keep the project support email current.
 
 Email/password works without custom SMTP. Firebase sends verification and password-reset messages through its managed authentication email system.
@@ -54,19 +54,19 @@ Managed authentication activates only when the Invite API URL and complete Fireb
 
 ## Google sign-in
 
-Invite uses Expo AuthSession to obtain a Google ID token and exchanges that token for a Firebase credential. Configure public OAuth **client IDs**, never a client secret:
+Android Google sign-in uses the native `react-native-nitro-google-signin` integration and Android Credential Manager. The native Google ID token is exchanged for a Firebase credential with `GoogleAuthProvider.credential()` and `signInWithCredential()`.
 
-```bash
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=...apps.googleusercontent.com
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...apps.googleusercontent.com
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
-```
+Android configuration is split between:
 
-Only the current platform's client ID is required to display the Google button on that platform. Configure every platform that will ship.
+- `google-services.json`, registered for package `com.charifmahmoudi.invite` and referenced from `expo.android.googleServicesFile`;
+- a Google OAuth **Android** client registered for the same package and the signing certificate SHA-1;
+- the Firebase/Google-generated **Web** OAuth client contained in `google-services.json`, which the native library auto-detects for ID-token issuance.
 
-For Android, register `com.charifmahmoudi.invite` and the signing certificate fingerprints for the build being tested. Release/Play signing uses different fingerprints from a local development keystore, so keep those OAuth registrations explicit.
+No OAuth client secret and no `EXPO_PUBLIC_GOOGLE_*` variables are required for the Android flow.
 
-Google sign-in remains hidden when the applicable public client ID is absent; email/password continues working.
+Every Android signing identity that will ship needs a matching OAuth registration. A development/debug certificate, a locally signed release, and Google Play App Signing can have different SHA-1 fingerprints; register the actual signing certificate used for each build channel instead of reusing or guessing one.
+
+Google sign-in is currently enabled on Android only. iOS stays disabled until its Firebase/Google native app configuration is added and validated.
 
 ## Invite API configuration
 
@@ -116,18 +116,19 @@ A future migration/linking flow must require recent proof of control of both the
 
 On React Native, Firebase session persistence uses AsyncStorage through Firebase's React Native persistence adapter. The app listens for Firebase ID-token changes and supplies `user.getIdToken()` to the existing Invite API adapter, allowing Firebase to refresh expiring tokens normally.
 
-Invite domain state is reloaded after authentication, provisioning, or account changes. Signing out of Invite also signs out of Firebase.
+Invite domain state is reloaded after authentication, provisioning, or account changes. Signing out of Invite also signs out of Firebase and the native Google session.
 
 ## Staged rollout
 
-1. Enable Email/Password in the Firebase project.
-2. Configure the isolated Invite API with `AUTH_MODE=firebase` and `FIREBASE_PROJECT_ID=invite-someone-app`.
-3. Build an isolated Firebase-enabled client pointing at that API.
-4. Verify registration, email verification, password reset, sign-in, sign-out, profile provisioning, and returning-user access.
-5. Configure Google OAuth client IDs and verify Google on each target platform.
-6. Add real Firebase-authenticated API/device tests against isolated data.
-7. Ship a Firebase-enabled production build before switching the production API away from internal compatibility auth.
-8. Retire internal password/JWT issuance only after unsupported legacy clients can no longer reach the production API.
+1. Enable Email/Password and Google in the Firebase project.
+2. Register the Android Firebase app and OAuth clients for the actual signing certificate.
+3. Build and validate the native Firebase-enabled Android client on an implementation branch.
+4. Configure the isolated Invite API with `AUTH_MODE=firebase` and `FIREBASE_PROJECT_ID=invite-someone-app`.
+5. Run required MongoDB index maintenance against the isolated auth database.
+6. Verify registration, email verification, password reset, sign-in, sign-out, profile provisioning, returning-user access, and Google sign-in against isolated data.
+7. Add real Firebase-authenticated API/device tests against isolated data.
+8. Ship a Firebase-enabled production build before switching the production API away from internal compatibility auth.
+9. Retire internal password/JWT issuance only after unsupported legacy clients can no longer reach the production API.
 
 ## Still intentionally out of scope
 
