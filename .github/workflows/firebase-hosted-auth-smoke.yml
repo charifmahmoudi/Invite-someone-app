@@ -1,0 +1,82 @@
+name: Firebase Hosted Auth Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['impl/firebase-auth']
+    paths:
+      - '.github/workflows/firebase-hosted-auth-smoke.yml'
+      - 'server/src/auth.ts'
+      - 'server/src/config.ts'
+      - 'server/src/identity-router.ts'
+      - 'server/src/database.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      E2E_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
+      FIREBASE_WEB_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
+
+    steps:
+      - name: Verify hosted Firebase token boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EMAIL="invite-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com"
+          PASSWORD="Invite-CI-${GITHUB_RUN_ID}-Aa9!"
+          ID_TOKEN=''
+
+          cleanup() {
+            if [ -n "$ID_TOKEN" ]; then
+              curl --silent --show-error \
+                --request POST \
+                --header 'Content-Type: application/json' \
+                --data "$(jq -nc --arg token "$ID_TOKEN" '{idToken:$token}')" \
+                "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${FIREBASE_WEB_API_KEY}" \
+                >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail "$E2E_API_URL/health" | grep -Fq '"status":"ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo 'Firebase E2E API did not become healthy.' >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          SIGNUP_PAYLOAD="$(jq -nc --arg email "$EMAIL" --arg password "$PASSWORD" '{email:$email,password:$password,returnSecureToken:true}')"
+          SIGNUP_RESPONSE="$(curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$SIGNUP_PAYLOAD" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_WEB_API_KEY}")"
+          ID_TOKEN="$(jq -er '.idToken' <<<"$SIGNUP_RESPONSE")"
+
+          PROVISION_PAYLOAD="$(jq -nc '{name:"CI Firebase User",city:"Berlin",interests:["Coffee"],availability:["Saturday"],connectionGoals:["New friends"]}')"
+          HTTP_STATUS="$(curl --silent --show-error \
+            --output /tmp/provision-response.json \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer ${ID_TOKEN}" \
+            --data "$PROVISION_PAYLOAD" \
+            "$E2E_API_URL/v1/auth/provision")"
+
+          test "$HTTP_STATUS" = '400'
+          test "$(jq -r '.code' /tmp/provision-response.json)" = 'VERIFIED_EMAIL_REQUIRED'
+
+          # The token was signed by hosted Firebase and accepted by the Invite API.
+          # The API then correctly refused MongoDB provisioning because this disposable
+          # test account has not completed Firebase email verification.
+          echo 'Hosted Firebase token accepted; unverified provisioning correctly rejected.'
