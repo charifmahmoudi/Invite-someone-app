@@ -5,13 +5,19 @@ import helmet from 'helmet';
 import { createApp } from './app';
 import { requireAuthentication } from './auth';
 import { config } from './config';
-import { closeDatabase } from './database';
+import { closeDatabase, ensureDatabaseIndexes } from './database';
 import { identityRouter } from './identity-router';
 import { resourceRouter } from './resource-router';
 
 const resourceReadPaths = new Set(['/me', '/activities', '/people', '/invitations', '/saved']);
 
-const start = () => {
+const start = async () => {
+  if (config.ensureIndexesOnStart) {
+    console.log('Ensuring Invite MongoDB indexes before API startup.');
+    await ensureDatabaseIndexes();
+    console.log('Invite MongoDB indexes are ready.');
+  }
+
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
@@ -58,9 +64,7 @@ const start = () => {
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 };
 
-try {
-  start();
-} catch (error: unknown) {
+start().catch((error: unknown) => {
   console.error('Invite API failed to start.', error);
   process.exitCode = 1;
-}
+});
