@@ -1,149 +1,100 @@
-# Testing strategy and CI/E2E architecture
+# Testing strategy
 
-## Purpose
+This document defines **what each test layer must prove**. For current progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For exact operator steps, test-user creation and release acceptance, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
 
-Invite uses multiple test layers because no single layer can prove product behavior, server authorization, database concurrency and native usability at once.
+## Test layers
 
 ```text
-                 few, high-value
-             ┌────────────────────┐
-             │ Device E2E         │
-             │ Maestro + physical │
-             ├────────────────────┤
-             │ API integration    │
-             │ Firebase + Mongo   │
-             ├────────────────────┤
-             │ Component tests    │
-             │ critical UI states │
-             ├────────────────────┤
-             │ Domain/unit tests  │
-             │ reducer/validation │
-             ├────────────────────┤
-             │ Static/build gates │
-             │ TS/lint/export     │
-             └────────────────────┘
-                 many, very fast
+Device/provider acceptance     few, release-focused
+Hosted API + Firebase smoke
+MongoDB/API integration
+Domain/unit/component tests
+TypeScript/lint/build gates     many, fast
 ```
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for trust boundaries, [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md) for identity configuration, and [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) for the repeatable physical-phone/user-management/release procedure.
+No single layer proves native behavior, provider configuration, authorization and MongoDB correctness at once.
 
-## Current CI gates
+## CI gates
 
-The `CI` workflow runs:
-
-1. `npm ci`;
-2. strict application and server TypeScript compilation;
-3. ESLint/React Compiler checks;
-4. Jest domain/user-story tests with coverage;
-5. production Expo web export.
-
-It runs on `main`, pull requests, `impl/**` staging branches and manual dispatch.
+The standard `CI` workflow runs on `main`, `impl/**`, pull requests and manual dispatch:
 
 ```bash
+npm ci
 npm run typecheck
 npm run lint
 npm run test:ci
 npm run export:web -- --output-dir dist
 ```
 
-Two Firebase staging workflows add provider/native checks:
+It proves TypeScript correctness, ESLint/React Compiler rules, domain/user-story tests and a production web export.
 
-- **Firebase Hosted Auth Smoke** creates a disposable hosted Firebase password user, obtains a real Firebase ID token, proves the isolated Express API accepts that Firebase token, asserts that an unverified email cannot provision MongoDB state, and deletes the disposable Firebase user.
-- **Validate Firebase Android** verifies isolated API health/401 behavior, runs Expo Android prebuild, validates generated Firebase configuration, compiles the native release APK, verifies the embedded JS bundle and expected signing certificate, and uploads a short-lived APK artifact for physical-device testing.
+Firebase staging adds two provider/native workflows:
 
-The mobile preview workflow independently builds the compatibility Android release variant from `main`, verifies the embedded JavaScript bundle, uploads the APK/checksum, and publishes the development-signed preview.
+- **Firebase Hosted Auth Smoke** creates a disposable real Firebase password user, obtains a genuine Firebase ID token, proves the isolated Express API accepts it, proves an unverified user cannot provision MongoDB state, and deletes the user.
+- **Validate Firebase Android** checks the isolated API, runs Expo Android prebuild, verifies Firebase native configuration, builds the release APK, checks the embedded JS bundle and signing certificate, and uploads the short-lived E2E APK.
 
-## Existing automated tests
+The compatibility mobile-preview workflow on `main` remains independent from Firebase staging.
 
-- `validation.test.ts` protects registration/profile/activity validation.
-- `matching.test.ts` verifies matching signals, eligibility rules and explanations.
-- `profile-discovery.test.ts` verifies discovery filters, approximate distance calculations and bounded map projection.
-- `app-reducer.test.ts` covers activity creation, invitations, acceptance, decline, public joining, duplicate prevention and saved activities.
+## Domain and component coverage
 
-These fast tests do not by themselves prove Firebase token verification, API authorization or MongoDB concurrency behavior.
+Fast tests cover registration/profile/activity validation, matching and discovery logic, reducer behavior, invitation state transitions, capacity rules and saved activities.
 
-## API integration layer
+These tests do not replace server authorization or hosted Firebase testing.
 
-The hosted Firebase token boundary now has a real-provider staging smoke, but the full MongoDB-backed integration suite still needs to cover:
+## API integration requirements
 
-- unauthenticated protected requests fail;
-- malformed, expired, wrong-audience and wrong-issuer Firebase ID tokens fail;
-- an ID token signed by an unknown Firebase key ID fails;
-- a valid Firebase UID resolves only to its mapped Invite user;
-- an unmapped Firebase UID receives `INVITE_PROFILE_REQUIRED` on member resources;
-- provisioning requires a verified email claim;
-- a Firebase identity cannot silently claim an existing Invite account by matching email;
-- a member cannot update another profile;
-- invite-only activities are hidden from unrelated members;
-- only a host can send invitations;
-- receiver/sender permissions are enforced for invitation responses;
-- simultaneous final-slot joins produce one success and one capacity failure;
+The MongoDB-backed API suite should cover:
+
+- protected endpoints reject unauthenticated requests;
+- malformed, expired, wrong-audience, wrong-issuer and unknown-key Firebase tokens fail;
+- a valid Firebase UID can resolve only its mapped Invite user;
+- an unmapped Firebase identity receives `INVITE_PROFILE_REQUIRED` where appropriate;
+- provisioning requires a verified email;
+- matching email alone cannot claim an existing Invite account;
+- member/host/receiver/sender permissions are enforced;
+- invite-only/private data is not leaked;
+- simultaneous capacity-sensitive writes remain transactionally correct;
 - invitation acceptance and attendee insertion roll back together;
-- saved activities are private;
-- public profiles do not leak email/auth fields;
-- geospatial queries respect their maximum distance.
+- saved activities stay private;
+- public profiles do not expose email/auth fields;
+- geospatial queries honor their distance bounds.
 
-Do not weaken the hosted provider smoke by adding an authentication bypass. It deliberately proves a real token issued by the configured Firebase project.
+Do not introduce an auth bypass just to make E2E easier. Hosted release smokes must prove real Firebase-issued tokens.
 
-## Device E2E architecture
+## Android acceptance strategy
 
-```text
-GitHub Actions
-      |
-      v
-Firebase E2E release APK
-      |
-      +------> Firebase Authentication development project
-      |
-      v
-Invite isolated Firebase E2E API
-      |
-      v
-MongoDB invite_firebase_e2e
-```
+Use a **Google-Play-enabled Android emulator first**. It is the primary environment for the full Firebase acceptance suite:
 
-Production API/database must never be the default E2E target.
-
-### Compatibility emulator foundation
-
-The repository also contains:
-
-```text
-.maestro/auth/sign-in-internal.yaml
-.github/workflows/e2e-android.yml
-```
-
-That manual workflow uses the seeded internal compatibility account and refuses the known production/demo API. It remains a build/device compatibility smoke while Firebase migration testing uses the isolated Firebase environment.
-
-### Physical Firebase acceptance
-
-The native Firebase release workflow produces `invite-firebase-android-e2e`. Follow [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) to install that APK on a real Android phone and test:
-
-- registration;
-- verification-link handoff;
-- profile provisioning;
-- returning sign-in;
+- email/password registration and sign-in;
+- verification-state refresh;
+- onboarding/profile provisioning;
 - password reset;
-- persisted session after force-close/restart;
+- Firebase session restoration after process restart;
 - sign-out;
-- Google provider callback;
-- MongoDB member/identity mapping.
+- Google Sign-In;
+- Firebase ID token -> Express -> MongoDB behavior;
+- stable Firebase UID -> Invite user mapping.
 
-A successful native compile is not equivalent to a successful Google OAuth callback; the package name and signing SHA-1 must also be registered in the Google OAuth Android client.
+The emulator image must include Google Play services for Google Sign-In.
 
-## Firebase Auth E2E strategy
+After the emulator suite passes, run a **short physical-phone smoke** only for behavior the emulator cannot fully prove: real email/browser handoff, Google account chooser, real-device background/session behavior, installation and network recovery.
 
-Do not add an Invite authentication bypass or hard-coded production login.
+The exact sequence is documented in [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
 
-Firebase's Auth Emulator remains useful for deterministic automation of Firebase-specific registration/email-verification behavior when practical. Hosted Firebase must still receive targeted release smokes because hosted configuration and Google OAuth are external dependencies that an emulator cannot prove.
+## Google provider testing
 
-The current hosted boundary smoke intentionally uses a disposable unverified Firebase account. Verified-email link handling still requires either a controlled mailbox/emulator test harness or the documented physical-phone acceptance test. Do not weaken the API's `emailVerified=true` provisioning requirement merely to simplify CI.
+Google provider UI is a release/configuration smoke, not a routine CI login path. Consent screens and device/provider challenges make unattended UI automation brittle.
 
-Google provider UI should not be the routine CI authentication path because consent screens, bot/device challenges and provider-side changes make it brittle. Test Google as a release/provider configuration smoke after email/password and API authorization are proven.
+A successful native build is not enough. Google Sign-In also requires an Android OAuth client matching:
 
-## Stable UI selectors
+```text
+package: com.charifmahmoudi.invite
+signing SHA-1: certificate used by that installed build
+```
 
-Current managed-auth selectors include:
+Repository APK signing, Internal App Sharing signing and Play App Signing can use different certificates. See [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
+
+## Stable managed-auth selectors
 
 ```text
 welcome-screen
@@ -163,115 +114,51 @@ profile-city
 profile-submit
 ```
 
-The legacy compatibility path intentionally reuses `auth-email`, `auth-password` and `auth-submit` so the existing Maestro smoke can remain stable during migration.
+The compatibility path intentionally reuses the core auth selectors so existing Maestro coverage remains useful during migration.
 
-## High-value managed-auth journeys
+## High-value journeys
 
-Prioritize:
+Prioritize these managed-auth journeys:
 
-1. email/password registration;
-2. unverified user cannot provision an Invite profile;
-3. email verification refresh unlocks onboarding;
-4. first-time Firebase identity provisions one internal Invite user;
-5. returning Firebase identity resolves to the same Invite user;
-6. password reset request succeeds without leaking whether a user exists;
-7. session restoration and ID-token refresh survive app restart/backgrounding;
-8. sign-out clears both Firebase and Invite sessions;
-9. Google sign-in creates/loads the correct Firebase identity;
-10. final-slot capacity, invitation privacy and authorization remain correct across users.
+1. register -> verify -> onboard -> same member on returning sign-in;
+2. unverified identity cannot provision a profile;
+3. password reset preserves the same Invite member;
+4. app restart restores the Firebase session;
+5. sign-out clears Firebase/Invite/Google session state;
+6. Google first sign-in and repeat sign-in resolve to the same member;
+7. existing-email collision returns `ACCOUNT_LINK_REQUIRED`;
+8. multi-user invitation/capacity rules remain correct under Firebase identities.
 
-Representative multi-user journey:
+Representative multi-user flow:
 
 ```text
-reset isolated fixture
-  -> sign in HOST through Firebase
-  -> create activity
-  -> invite GUEST
-  -> sign out
-  -> sign in GUEST through Firebase
-  -> accept invitation
-  -> assert attendee state
+HOST sign-in -> create activity -> invite GUEST
+-> sign out -> GUEST sign-in -> accept invitation
+-> assert attendee/capacity state
 ```
 
-## Secrets and public configuration
+## MongoDB schema gate
 
-| Value | Secret? | Location |
-| --- | --- | --- |
-| E2E API URL | no | workflow/repository configuration |
-| Firebase Web `apiKey` | no, public client configuration | Expo/E2E build |
-| Firebase authDomain/projectId/appId/etc. | no | Expo/E2E build |
-| Google OAuth client IDs | no | native/provider configuration |
-| Google OAuth client secret | yes; not needed by current app | never in Expo |
-| Firebase service-account private key | yes; not needed by current verifier | do not create/embed for this path |
-| E2E MongoDB URI | yes | E2E server only |
-| production MongoDB URI | yes | production server only |
-
-Privileged workflows must not execute untrusted fork code with repository secrets.
-
-## Firebase server verification tests
-
-The server verifier should be exercised at the JWT boundary. Test the documented Firebase constraints:
+The isolated `invite_firebase_e2e` database uses the server's canonical index definitions. Bootstrap can temporarily use:
 
 ```text
-header.alg == RS256
-header.kid exists in Google's Firebase signing certificates
-aud == invite-someone-app
-iss == https://securetoken.google.com/invite-someone-app
-sub is non-empty
-exp is future
-iat is not future
-auth_time is not future
+MONGODB_ENSURE_INDEXES_ON_START=true
 ```
 
-Where unit tests need deterministic keys, inject or factor certificate retrieval rather than calling Google from every test. The hosted staging smoke now validates at least one real Firebase-issued token end-to-end.
-
-## MongoDB schema/index gate
-
-The isolated `invite_firebase_e2e` database is bootstrapped with the server's canonical `ensureDatabaseIndexes()` implementation. The one-time startup switch is `MONGODB_ENSURE_INDEXES_ON_START=true`; it must be returned to `false` after the schema indexes are established.
-
-Normal scale-to-zero API startup must not maintain schema indexes on every cold start. See the runbook for the expected index list and verification procedure.
+Return it to `false` after indexes exist. Normal scale-to-zero startup must not maintain indexes on every cold start.
 
 ## Cold-start behavior
 
-Free/scale-to-zero hosting can introduce a slow first request. Read paths may use bounded timeout/retry behavior, and E2E waits may allow a cold-start window.
+Free/scale-to-zero hosting can make the first request slow. Reads and E2E waits may tolerate a bounded cold-start delay.
 
 Do not blindly retry writes such as activity creation or invitation acceptance until those operations have explicit idempotency guarantees.
 
-## Failure evidence
+## Secrets and evidence
 
-Device jobs should retain:
+Safe/public client configuration includes Firebase Web config, OAuth client IDs and E2E API URLs. Never log or commit MongoDB URIs, passwords, OAuth client secrets, Firebase service-account private keys, signing private keys or Firebase ID tokens.
 
-- build/APK artifact;
-- Maestro output/screenshots when Maestro is used;
-- commit/build identifier;
-- target environment identifier;
-- API correlation IDs once request logging is implemented.
+Device/release jobs should retain the build artifact, commit identifier, target environment and useful screenshots/logs without secrets.
 
-Never print Firebase ID tokens, MongoDB URIs, passwords, OAuth secrets or private keys to logs.
+## Release gate
 
-## Manual release matrix
-
-| Platform | Target | Focus |
-| --- | --- | --- |
-| iOS | small supported iPhone | keyboard, wrapping, verification links, Firebase session |
-| iOS | large current iPhone | safe areas, haptics, session restoration; Google after iOS provider enablement |
-| Android | compact supported device | predictive back, keyboard, Firebase/Google callback |
-| Android | large device | responsive layout, date/time picker |
-| Web | Chrome and Safari | static routing, keyboard/focus, Firebase/Google browser auth when enabled |
-
-Repeat important flows with larger system text, reduced motion, VoiceOver/TalkBack and poor network conditions.
-
-## Implementation sequence
-
-1. **Implemented:** fast CI static/domain/build gates.
-2. **Implemented:** stable selectors and internal-auth Android compatibility smoke.
-3. **Implemented:** Firebase client session bridge, email/password UI, verification and password reset flows.
-4. **Implemented:** Firebase ID-token verification on the Express API.
-5. **Implemented:** native Android Google credential integration.
-6. **Implemented:** isolated Render Firebase API + dedicated MongoDB E2E database.
-7. **Implemented:** canonical MongoDB index bootstrap/verification, returned to disabled-on-start normal mode.
-8. **Implemented:** hosted real-Firebase-token boundary smoke including unverified-email provisioning rejection.
-9. **Implemented:** native Firebase Android release build gate with hosted API smoke and downloadable physical-device artifact.
-10. **Next release gate:** complete the runbook's physical-phone email/password, verification, reset, session and Google acceptance tests.
-11. **Next automation:** expand MongoDB-backed authorization/concurrency integration coverage and deterministic verification-email testing.
-12. **Then:** add multi-user activity/invitation E2E journeys and make the reliable subset a production release gate.
+The Firebase migration is not ready for `main` solely because CI or the APK build passes. Require the emulator suite, collision-safety check, short physical-phone smoke and Play-distribution signing test described in the runbooks before promotion.
