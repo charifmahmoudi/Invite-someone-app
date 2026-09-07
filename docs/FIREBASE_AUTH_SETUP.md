@@ -2,6 +2,8 @@
 
 Invite uses Firebase Authentication for identity only. The Express API remains the authorization and business-logic boundary, and MongoDB Atlas remains the application database.
 
+This document explains the architecture and configuration. For the repeatable operator procedure—building an APK, installing it on a physical Android phone, adding users, testing verification/password reset/Google sign-in, inspecting MongoDB, operating the isolated Render service, troubleshooting, and release acceptance—use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
+
 ## Runtime modes
 
 Invite keeps two authentication modes during migration:
@@ -26,7 +28,7 @@ Firebase owns email/password credentials, verification emails, password resets, 
 
 ## Firebase Console configuration
 
-Under **Authentication -> Sign-in method**:
+Under **Security -> Authentication -> Sign-in method**:
 
 1. enable **Email/Password**;
 2. enable **Google**;
@@ -77,9 +79,12 @@ NODE_ENV=production
 AUTH_MODE=firebase
 FIREBASE_PROJECT_ID=invite-someone-app
 MONGODB_URI=mongodb+srv://...
-MONGODB_DB_NAME=invite_auth_dev
+MONGODB_DB_NAME=invite_firebase_e2e
+MONGODB_ENSURE_INDEXES_ON_START=false
 CORS_ORIGINS=*
 ```
+
+`invite_firebase_e2e` is the current isolated migration-test database. Production remains on its existing database. Never use a production MongoDB URI for Firebase migration E2E testing.
 
 The current server does **not** require Firebase Admin SDK credentials. It verifies Firebase ID-token signatures against Google's published Firebase signing certificates and validates:
 
@@ -125,8 +130,8 @@ Invite domain state is reloaded after authentication, provisioning, or account c
 3. Build and validate the native Firebase-enabled Android client on an implementation branch.
 4. Configure the isolated Invite API with `AUTH_MODE=firebase` and `FIREBASE_PROJECT_ID=invite-someone-app`.
 5. Run required MongoDB index maintenance against the isolated auth database.
-6. Verify registration, email verification, password reset, sign-in, sign-out, profile provisioning, returning-user access, and Google sign-in against isolated data.
-7. Add real Firebase-authenticated API/device tests against isolated data.
+6. Run the hosted Firebase-token boundary smoke.
+7. Follow [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) for physical-phone registration, email verification, password reset, session persistence, Google sign-in, MongoDB identity mapping, and collision-safety acceptance tests.
 8. Ship a Firebase-enabled production build before switching the production API away from internal compatibility auth.
 9. Retire internal password/JWT issuance only after unsupported legacy clients can no longer reach the production API.
 
