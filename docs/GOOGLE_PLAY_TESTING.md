@@ -12,15 +12,17 @@ This guide separates three different Google Play testing/release mechanisms so s
 App name: Invite
 Android package: com.charifmahmoudi.invite
 Firebase project: invite-someone-app
+Google Cloud project number: 367720887571
+GitHub repository: charifmahmoudi/Invite-someone-app
 ```
 
-Never put an Android upload keystore, keystore password, OAuth client secret, Firebase service-account key, MongoDB URI, or Firebase ID token in this repository.
+Never put an Android upload keystore, keystore password, OAuth client secret, Firebase service-account key, MongoDB URI, Firebase ID token, or Google Cloud service-account JSON key in this repository.
 
 ## Fastest current route: Internal App Sharing
 
 Use this first when the goal is simply to install and test Invite from Google Play.
 
-### 1. Create the app in Play Console
+### 1. Play app
 
 The Invite app already exists in the current Play Console account. Do not create another Play app for this package.
 
@@ -30,9 +32,9 @@ The Android package is permanently:
 com.charifmahmoudi.invite
 ```
 
-### 2. Build the Play test app bundle from GitHub
+### 2. GitHub build artifacts
 
-The Firebase Android validation workflow now produces two artifacts:
+The Firebase Android validation workflow produces:
 
 ```text
 artifact: invite-firebase-android-e2e
@@ -46,35 +48,163 @@ Prefer `invite-firebase-play-test-aab` for Google Play testing because `.aab` is
 
 The AAB produced here is only for **Internal App Sharing**. It intentionally uses the repository validation signing identity. Do not treat that signing identity as the permanent Google Play upload key.
 
-### 3. Upload the AAB to Internal App Sharing
+## Automatic Internal App Sharing from GitHub
 
-In Play Console, select the Invite app, then go to:
+The Firebase Android validation workflow can upload `app-release.aab` directly to Google Play Internal App Sharing after the build and validation gates pass.
 
-**Test and release -> Internal testing -> Internal app sharing**
+The upload uses the Google Play Developer API `internalappsharingartifacts.uploadbundle` endpoint. A successful upload adds the Play installation URL, Internal App Sharing certificate SHA-256, and uploaded artifact SHA-256 to the GitHub Actions job summary.
 
-Upload `app-release.aab` from the `invite-firebase-play-test-aab` GitHub Actions artifact.
+Authentication uses **GitHub OIDC -> Google Cloud Workload Identity Federation -> service-account impersonation**. No long-lived service-account JSON key is stored in GitHub.
 
-Internal App Sharing accepts APK or AAB files signed with any key. Google re-signs the uploaded artifact with an Internal App Sharing certificate and generates a download link. Internal App Sharing version codes do not need to be unique.
+The workflow is guarded by this repository variable:
 
-### 4. Copy the Internal App Sharing signing SHA-1
+```text
+GOOGLE_PLAY_CICD_ENABLED=true
+```
 
-After the first upload, stay in Internal App Sharing and find **Internal test certificate**. Copy the SHA-1 fingerprint.
+Until that variable is set, Android validation still runs and produces APK/AAB artifacts, but the Google Play upload step is skipped.
 
-This certificate is different from the repository validation APK certificate and different from the future Play App Signing production certificate.
+### One-time Google Cloud bootstrap
 
-### 5. Register the Internal App Sharing SHA-1 with Firebase
+Use Google Cloud Shell while the active project is `invite-someone-app`.
 
-Open Firebase Console -> Project settings -> General -> Android app `com.charifmahmoudi.invite` -> **SHA certificate fingerprints**.
+```bash
+set -euo pipefail
 
-Add the Internal App Sharing SHA-1 and save.
+PROJECT_ID="invite-someone-app"
+PROJECT_NUMBER="367720887571"
+REPO="charifmahmoudi/Invite-someone-app"
+POOL_ID="github-play"
+PROVIDER_ID="invite-repo"
+SERVICE_ACCOUNT_NAME="invite-play-ci"
+SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-Then download a fresh `google-services.json` and replace the repository copy on `impl/firebase-auth`. Do not hand-edit OAuth client entries into the JSON file.
+# APIs required by the Play Publisher call and service-account impersonation.
+gcloud services enable \
+  androidpublisher.googleapis.com \
+  iamcredentials.googleapis.com \
+  sts.googleapis.com \
+  --project="$PROJECT_ID"
 
-Rebuild the Firebase Android validation workflow and upload the new AAB to Internal App Sharing again. Google will continue using the same Internal App Sharing test certificate for this app.
+# Dedicated CI identity. Do not create or download a service-account key.
+gcloud iam service-accounts create "$SERVICE_ACCOUNT_NAME" \
+  --project="$PROJECT_ID" \
+  --display-name="Invite Google Play CI"
 
-This step is required so Google Sign-In works in the Google-re-signed Internal App Sharing build.
+# GitHub OIDC trust pool.
+gcloud iam workload-identity-pools create "$POOL_ID" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --display-name="GitHub Actions Play"
 
-### 6. Enable Internal App Sharing on the tester device
+# Trust only this repository and the Firebase staging branch.
+gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --workload-identity-pool="$POOL_ID" \
+  --display-name="Invite repository" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
+  --attribute-condition="assertion.repository=='${REPO}' && assertion.ref=='refs/heads/impl/firebase-auth'"
+
+POOL_NAME="$(gcloud iam workload-identity-pools describe "$POOL_ID" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --format="value(name)")"
+
+gcloud iam service-accounts add-iam-policy-binding "$SERVICE_ACCOUNT_EMAIL" \
+  --project="$PROJECT_ID" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_NAME}/attribute.repository/${REPO}"
+
+printf 'Service account: %s\n' "$SERVICE_ACCOUNT_EMAIL"
+gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --workload-identity-pool="$POOL_ID" \
+  --format="value(name)"
+```
+
+Expected identities used by the checked-in workflow:
+
+```text
+Service account:
+invite-play-ci@invite-someone-app.iam.gserviceaccount.com
+
+Workload Identity Provider:
+projects/367720887571/locations/global/workloadIdentityPools/github-play/providers/invite-repo
+```
+
+If any resource already exists, inspect it instead of deleting/recreating it blindly. The provider must remain restricted to `charifmahmoudi/Invite-someone-app` and `refs/heads/impl/firebase-auth` while this migration is staged.
+
+### One-time Play Console permission
+
+Open **Play Console -> Users and permissions -> Invite new users** and invite:
+
+```text
+invite-play-ci@invite-someone-app.iam.gserviceaccount.com
+```
+
+Give the service account access to the **Invite** app only. Grant the minimum release permission:
+
+```text
+Release apps to testing tracks
+```
+
+If Play Console requires the read permission as a prerequisite, also grant:
+
+```text
+View app information (read-only)
+```
+
+Do not grant production release, financial, order, admin, or account-management permissions.
+
+Google documents that `Release apps to testing tracks` authorizes Internal App Sharing uploads.
+
+### Enable the GitHub upload gate
+
+After Google Cloud federation and Play Console permissions are complete, open:
+
+**GitHub repository -> Settings -> Secrets and variables -> Actions -> Variables**
+
+Create this repository variable:
+
+```text
+Name: GOOGLE_PLAY_CICD_ENABLED
+Value: true
+```
+
+This is a non-secret feature flag. No Google private key is required in GitHub Secrets.
+
+After the variable is enabled, trigger a fresh Firebase Android validation run. Every successful eligible run will then:
+
+1. validate the isolated Firebase API;
+2. generate the native Android project;
+3. verify Firebase configuration;
+4. build the APK and AAB;
+5. verify signing/configuration;
+6. keep the APK/AAB as GitHub artifacts;
+7. obtain a short-lived Google access token via GitHub OIDC;
+8. upload the AAB to Internal App Sharing;
+9. print the Google Play install link in the GitHub Actions run summary.
+
+### First automatic upload: register Google's Internal App Sharing certificate
+
+After the first successful automatic upload, open:
+
+**Play Console -> Invite -> Test and release -> Internal testing -> Internal app sharing -> Uploaders and testers**
+
+Find **Internal test certificate** and copy its **SHA-1** fingerprint.
+
+The Google Play API response exposes the certificate SHA-256, but Firebase Android Google Sign-In needs the SHA-1 registration as well. Add the SHA-1 to:
+
+**Firebase Console -> Project settings -> General -> Android app `com.charifmahmoudi.invite` -> SHA certificate fingerprints**
+
+Then download a fresh `google-services.json`, update `impl/firebase-auth`, and rebuild. Google will continue using the same Internal App Sharing certificate for the app.
+
+This is a one-time certificate bootstrap for Internal App Sharing Google Sign-In.
+
+### Tester device
 
 On the Android test phone:
 
@@ -82,18 +212,12 @@ On the Android test phone:
 2. Open **Settings -> About**.
 3. Tap **Play Store version** seven times.
 4. Turn on **Internal app sharing** when the option appears.
-5. Open the Internal App Sharing download link using the tester Google account.
+5. Open the installation link from the successful GitHub Actions summary.
 6. Install Invite from Google Play.
 
+Play Console can allow anyone with the link or restrict downloaders to an email list. Prefer a restricted tester list if additional people are involved.
+
 Use this build for Play-delivery smoke testing: installation, launch, Firebase email/password, Google Sign-In, session persistence, password reset, and API/MongoDB behavior.
-
-## Automating Internal App Sharing from GitHub later
-
-Google Play Developer API exposes `internalappsharingartifacts.uploadbundle`, so after Play API/service-account access is configured, GitHub Actions can upload the AAB automatically and return the generated download URL.
-
-Do not put a Google service-account JSON key in the repository. Store deployment credentials only in GitHub Actions secrets or use a workload-identity approach if configured later.
-
-The one-time manual Internal App Sharing upload is still useful because it establishes the Internal App Sharing test certificate that Firebase must trust for Google Sign-In.
 
 ## Release-like route: Internal testing track
 
@@ -166,3 +290,6 @@ Do not promote the Firebase migration to `main` solely because Play accepted an 
 - Personal-account testing requirements: https://support.google.com/googleplay/android-developer/answer/14151465
 - Create and set up an app: https://support.google.com/googleplay/android-developer/answer/9859152
 - Google Play Developer API: https://developers.google.com/android-publisher/api-ref/rest
+- Google Play Developer API setup: https://developers.google.com/android-publisher/getting_started
+- Google Cloud Workload Identity Federation: https://cloud.google.com/iam/docs/workload-identity-federation
+- GitHub Google Cloud OIDC: https://docs.github.com/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-google-cloud-platform
