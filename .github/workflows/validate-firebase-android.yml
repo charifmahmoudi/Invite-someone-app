@@ -81,24 +81,21 @@ jobs:
           test -f android/app/google-services.json
           grep -Fq 'com.charifmahmoudi.invite' android/app/google-services.json
 
-      - name: Build Firebase-enabled release APK and Play test bundle
+      - name: Build Firebase-enabled validation APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon
+          ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Verify APK, app bundle, embedded bundle and signing certificate
+      - name: Verify validation APK and signing certificate
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
-          AAB=android/app/build/outputs/bundle/release/app-release.aab
           test -f "$APK"
-          test -f "$AAB"
           unzip -Z1 "$APK" | grep -Fxq 'assets/index.android.bundle'
-          unzip -Z1 "$AAB" | grep -Fq 'base/manifest/AndroidManifest.xml'
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           test -n "$APKSIGNER"
           CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/.*SHA-1 digest: //p' | head -1 | tr '[:lower:]' '[:upper:]' | tr -d ':')"
-          echo "APK signing SHA-1: $CERT_SHA1"
+          echo "Validation APK signing SHA-1: $CERT_SHA1"
           test "$CERT_SHA1" = '5E8F16062EA3CD2C4A0D547876BAA6F38CABF625'
 
       - name: Upload validation APK
@@ -109,27 +106,100 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Play test app bundle
+      - name: Check Play upload signing secrets
+        id: play-signing
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -n "$PLAY_UPLOAD_KEYSTORE_BASE64" ] && [ -n "$PLAY_UPLOAD_STORE_PASSWORD" ] && [ -n "$PLAY_UPLOAD_KEY_ALIAS" ] && [ -n "$PLAY_UPLOAD_KEY_PASSWORD" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '### Google Play bundle signing'
+              echo ''
+              echo 'Play upload signing secrets are not configured, so no Play AAB was produced.'
+              echo 'Required repository secrets:'
+              echo '- `PLAY_UPLOAD_KEYSTORE_BASE64`'
+              echo '- `PLAY_UPLOAD_STORE_PASSWORD`'
+              echo '- `PLAY_UPLOAD_KEY_ALIAS`'
+              echo '- `PLAY_UPLOAD_KEY_PASSWORD`'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Configure Play release signing
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/play-upload.jks
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('android/app/build.gradle')
+          text = path.read_text()
+          marker = '    signingConfigs {\n'
+          if marker not in text:
+              raise SystemExit('Could not locate signingConfigs block in generated build.gradle')
+          release_config = '''    signingConfigs {\n        playRelease {\n            storeFile file(System.getenv("PLAY_UPLOAD_KEYSTORE_FILE"))\n            storePassword System.getenv("PLAY_UPLOAD_STORE_PASSWORD")\n            keyAlias System.getenv("PLAY_UPLOAD_KEY_ALIAS")\n            keyPassword System.getenv("PLAY_UPLOAD_KEY_PASSWORD")\n        }\n'''
+          text = text.replace(marker, release_config, 1)
+          debug_line = '            signingConfig signingConfigs.debug\n'
+          if debug_line not in text:
+              raise SystemExit('Could not locate release signingConfig in generated build.gradle')
+          text = text.replace(debug_line, '            signingConfig signingConfigs.playRelease\n', 1)
+          path.write_text(text)
+          PY
+
+      - name: Build Play release app bundle
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        working-directory: android
+        env:
+          PLAY_UPLOAD_KEYSTORE_FILE: play-upload.jks
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Verify Play app bundle release signature
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        run: |
+          set -euo pipefail
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          test -f "$AAB"
+          unzip -Z1 "$AAB" | grep -Fq 'base/manifest/AndroidManifest.xml'
+          jarsigner -verify -verbose -certs "$AAB" >/tmp/aab-signature.txt
+          keytool -printcert -jarfile "$AAB" | tee /tmp/aab-certificate.txt
+          if grep -Fqi 'Android Debug' /tmp/aab-certificate.txt; then
+            echo 'Play AAB is still signed with an Android debug certificate.' >&2
+            exit 1
+          fi
+
+      - name: Upload Play release app bundle
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: invite-firebase-play-test-aab
+          name: invite-firebase-play-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
 
       - name: Explain skipped Play deployment
-        if: ${{ vars.GOOGLE_PLAY_CICD_ENABLED != 'true' }}
+        if: ${{ steps.play-signing.outputs.available == 'true' && vars.GOOGLE_PLAY_CICD_ENABLED != 'true' }}
         run: |
           {
-            echo '### Google Play Internal App Sharing'
+            echo '### Google Play deployment'
             echo ''
-            echo 'Automatic upload is not enabled yet.'
+            echo 'The release-signed AAB was built, but automatic Play upload is not enabled yet.'
             echo 'Complete the one-time Google Cloud/Play Console setup and set repository variable `GOOGLE_PLAY_CICD_ENABLED=true`.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Authenticate to Google Cloud for Play upload
         id: play-auth
-        if: ${{ vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
+        if: ${{ steps.play-signing.outputs.available == 'true' && vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
         uses: google-github-actions/auth@v3
         with:
           project_id: invite-someone-app
@@ -140,7 +210,7 @@ jobs:
           create_credentials_file: false
 
       - name: Upload app bundle to Google Play Internal App Sharing
-        if: ${{ vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
+        if: ${{ steps.play-signing.outputs.available == 'true' && vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
         env:
           GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.play-auth.outputs.access_token }}
         run: |
