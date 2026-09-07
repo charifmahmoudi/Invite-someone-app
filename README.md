@@ -56,7 +56,7 @@ Every change to `main` runs [the mobile preview workflow](./.github/workflows/mo
 
 The default preview remains on the compatibility API until a Firebase-enabled client and API are deliberately cut over together.
 
-Firebase migration testing uses the on-demand [Validate Firebase Android workflow](./.github/workflows/validate-firebase-android.yml). It targets the isolated Firebase E2E API, checks the hosted API boundary, builds the native Firebase/Google-enabled APK, verifies its signing certificate, and uploads the `invite-firebase-android-e2e` artifact for physical-device testing. See the [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md) for installation and acceptance steps.
+Firebase migration testing uses the on-demand [Validate Firebase Android workflow](./.github/workflows/validate-firebase-android.yml). It targets the isolated Firebase E2E API, checks the hosted API boundary, builds the native Firebase/Google-enabled APK, verifies its signing certificate, and uploads the `invite-firebase-android-e2e` artifact. Use the [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md) for emulator-first acceptance and the short final phone smoke.
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 
@@ -93,7 +93,7 @@ Firebase is an identity provider only. MongoDB remains authoritative for profile
 
 The Express API maps each Firebase UID to an internal Invite user ID, so authentication-provider IDs do not leak throughout the domain model.
 
-See [Architecture](./docs/ARCHITECTURE.md), [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md), and the [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md).
+See [Current status](./docs/CURRENT_STATUS.md), [Architecture](./docs/ARCHITECTURE.md), [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md), and the [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md).
 
 ## Connect MongoDB and the API
 
@@ -119,9 +119,9 @@ EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:web:example
 
 Android Google sign-in is configured natively with `google-services.json`, a Web OAuth client for ID-token issuance, and a Google OAuth **Android** client registered for `com.charifmahmoudi.invite` plus the certificate SHA-1 used to sign that build. Android does not require an OAuth client secret or `EXPO_PUBLIC_GOOGLE_*` variables.
 
-Every Android signing channel can have a different SHA-1. The staging/development APK fingerprint must not be assumed to equal the future Google Play App Signing fingerprint.
+Every Android signing channel can have a different SHA-1. The staging/development APK fingerprint must not be assumed to equal Internal App Sharing or Google Play App Signing fingerprints.
 
-Never put MongoDB credentials, OAuth client secrets, Firebase service-account JSON, or private keys in `EXPO_PUBLIC_*` variables.
+Never put MongoDB credentials, OAuth client secrets, Firebase service-account JSON, signing private keys, or private keys in `EXPO_PUBLIC_*` variables.
 
 ## Commands
 
@@ -144,11 +144,13 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Documentation
 
+- [Current migration status](./docs/CURRENT_STATUS.md)
 - [Product brief](./docs/PRODUCT.md)
 - [User stories and acceptance criteria](./docs/USER_STORIES.md)
 - [Architecture](./docs/ARCHITECTURE.md)
 - [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md)
 - [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md)
+- [Google Play testing guide](./docs/GOOGLE_PLAY_TESTING.md)
 - [MongoDB backend setup](./docs/MONGODB_BACKEND.md)
 - [Data model and security rules](./docs/DATA_MODEL.md)
 - [Testing strategy](./docs/TESTING.md)
@@ -157,7 +159,7 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Project status
 
-This repository contains a functional, testable MVP. Firebase Authentication is being staged without breaking already-installed internal-auth builds. The old direct-Supabase data adapter remains only as historical compatibility code and is not the target authentication architecture. Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store release credentials remain post-MVP or later migration work.
+This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth` without changing the production `main` path. See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for completed work and remaining release gates. Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store production credentials remain later work.
 
 ## License
 
