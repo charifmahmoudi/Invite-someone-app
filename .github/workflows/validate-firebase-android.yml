@@ -255,7 +255,7 @@ jobs:
         uses: google-github-actions/auth@v3
         with:
           project_id: invite-someone-app
-          workload_identity_provider: projects/367720887571/locations/global/workloadIdentityPools/github-play/providers/invite-repo
+          workload_identity_provider: projects/367720887571/locations/global/workloadIdentityPools/github-actions/providers/github
           service_account: invite-play-ci@invite-someone-app.iam.gserviceaccount.com
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/androidpublisher
