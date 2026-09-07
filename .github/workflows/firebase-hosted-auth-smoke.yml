@@ -76,7 +76,17 @@ jobs:
           test "$HTTP_STATUS" = '400'
           test "$(jq -r '.code' /tmp/provision-response.json)" = 'VERIFIED_EMAIL_REQUIRED'
 
+          DELETE_PAYLOAD="$(jq -nc --arg token "$ID_TOKEN" '{idToken:$token}')"
+          curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$DELETE_PAYLOAD" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${FIREBASE_WEB_API_KEY}" \
+            >/dev/null
+          ID_TOKEN=''
+
           # The token was signed by hosted Firebase and accepted by the Invite API.
           # The API then correctly refused MongoDB provisioning because this disposable
-          # test account has not completed Firebase email verification.
-          echo 'Hosted Firebase token accepted; unverified provisioning correctly rejected.'
+          # test account has not completed Firebase email verification. Cleanup above is
+          # also a required part of the successful smoke.
+          echo 'Hosted Firebase token accepted; unverified provisioning rejected; disposable user deleted.'
