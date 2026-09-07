@@ -147,12 +147,18 @@ jobs:
               raise SystemExit('Could not locate signingConfigs block in generated build.gradle')
           release_config = '''    signingConfigs {\n        playRelease {\n            storeFile file(System.getenv("PLAY_UPLOAD_KEYSTORE_FILE"))\n            storePassword System.getenv("PLAY_UPLOAD_STORE_PASSWORD")\n            keyAlias System.getenv("PLAY_UPLOAD_KEY_ALIAS")\n            keyPassword System.getenv("PLAY_UPLOAD_KEY_PASSWORD")\n        }\n'''
           text = text.replace(marker, release_config, 1)
-          debug_line = '            signingConfig signingConfigs.debug\n'
-          if debug_line not in text:
+          release_anchor = '        release {\n            signingConfig signingConfigs.debug\n'
+          if release_anchor not in text:
               raise SystemExit('Could not locate release signingConfig in generated build.gradle')
-          text = text.replace(debug_line, '            signingConfig signingConfigs.playRelease\n', 1)
+          text = text.replace(
+              release_anchor,
+              '        release {\n            signingConfig signingConfigs.playRelease\n',
+              1,
+          )
           path.write_text(text)
           PY
+          grep -Fq 'playRelease {' android/app/build.gradle
+          grep -A2 -F 'release {' android/app/build.gradle | grep -Fq 'signingConfig signingConfigs.playRelease'
 
       - name: Build Play release app bundle
         if: ${{ steps.play-signing.outputs.available == 'true' }}
@@ -169,13 +175,29 @@ jobs:
         run: |
           set -euo pipefail
           AAB=android/app/build/outputs/bundle/release/app-release.aab
-          test -f "$AAB"
+          if [ ! -f "$AAB" ]; then
+            echo '::error title=Missing Play AAB::Expected release app bundle was not produced.'
+            exit 1
+          fi
           unzip -Z1 "$AAB" > /tmp/aab-entries.txt
-          grep -Fxq 'base/manifest/AndroidManifest.xml' /tmp/aab-entries.txt
-          jarsigner -verify -verbose -certs "$AAB" >/tmp/aab-signature.txt
-          keytool -printcert -jarfile "$AAB" | tee /tmp/aab-certificate.txt
+          if ! grep -Fxq 'base/manifest/AndroidManifest.xml' /tmp/aab-entries.txt; then
+            echo '::error title=Invalid Play AAB::base/manifest/AndroidManifest.xml is missing.'
+            exit 1
+          fi
+          if ! jarsigner -verify -verbose -certs "$AAB" > /tmp/aab-signature.txt 2>&1; then
+            cat /tmp/aab-signature.txt
+            echo '::error title=Play AAB signature verification failed::jarsigner rejected the release bundle.'
+            exit 1
+          fi
+          cat /tmp/aab-signature.txt
+          if ! keytool -printcert -jarfile "$AAB" > /tmp/aab-certificate.txt 2>&1; then
+            cat /tmp/aab-certificate.txt
+            echo '::error title=Play AAB certificate inspection failed::keytool could not read the bundle signer certificate.'
+            exit 1
+          fi
+          cat /tmp/aab-certificate.txt
           if grep -Fqi 'Android Debug' /tmp/aab-certificate.txt; then
-            echo 'Play AAB is still signed with an Android debug certificate.' >&2
+            echo '::error title=Debug-signed Play AAB::Play AAB is still signed with an Android debug certificate.'
             exit 1
           fi
 
