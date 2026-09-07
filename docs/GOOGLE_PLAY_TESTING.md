@@ -22,49 +22,47 @@ Use this first when the goal is simply to install and test Invite from Google Pl
 
 ### 1. Create the app in Play Console
 
-Open Google Play Console and select **Home -> Create app**.
+The Invite app already exists in the current Play Console account. Do not create another Play app for this package.
 
-Use:
-
-```text
-App name: Invite
-Default language: English (United States), unless another language is intentionally preferred
-App or game: App
-Free or paid: Free
-```
-
-Provide the developer contact email requested by Play Console and accept the required declarations and Play App Signing terms.
-
-Do not create a second app with a different package name. The Android package for Invite is permanently:
+The Android package is permanently:
 
 ```text
 com.charifmahmoudi.invite
 ```
 
-### 2. Upload the current E2E APK to Internal App Sharing
+### 2. Build the Play test app bundle from GitHub
 
-The Firebase Android validation workflow produces:
+The Firebase Android validation workflow now produces two artifacts:
 
 ```text
 artifact: invite-firebase-android-e2e
 file: app-release.apk
+
+artifact: invite-firebase-play-test-aab
+file: app-release.aab
 ```
+
+Prefer `invite-firebase-play-test-aab` for Google Play testing because `.aab` is the same distribution format used by Play testing tracks and production.
+
+The AAB produced here is only for **Internal App Sharing**. It intentionally uses the repository validation signing identity. Do not treat that signing identity as the permanent Google Play upload key.
+
+### 3. Upload the AAB to Internal App Sharing
 
 In Play Console, select the Invite app, then go to:
 
 **Test and release -> Internal testing -> Internal app sharing**
 
-Upload `app-release.apk`.
+Upload `app-release.aab` from the `invite-firebase-play-test-aab` GitHub Actions artifact.
 
-Internal App Sharing accepts APK or AAB files signed with any key. Google re-signs the uploaded APK with an Internal App Sharing certificate and generates a download link.
+Internal App Sharing accepts APK or AAB files signed with any key. Google re-signs the uploaded artifact with an Internal App Sharing certificate and generates a download link. Internal App Sharing version codes do not need to be unique.
 
-### 3. Copy the Internal App Sharing signing SHA-1
+### 4. Copy the Internal App Sharing signing SHA-1
 
 After the first upload, stay in Internal App Sharing and find **Internal test certificate**. Copy the SHA-1 fingerprint.
 
 This certificate is different from the repository validation APK certificate and different from the future Play App Signing production certificate.
 
-### 4. Register the Internal App Sharing SHA-1 with Firebase
+### 5. Register the Internal App Sharing SHA-1 with Firebase
 
 Open Firebase Console -> Project settings -> General -> Android app `com.charifmahmoudi.invite` -> **SHA certificate fingerprints**.
 
@@ -72,11 +70,11 @@ Add the Internal App Sharing SHA-1 and save.
 
 Then download a fresh `google-services.json` and replace the repository copy on `impl/firebase-auth`. Do not hand-edit OAuth client entries into the JSON file.
 
-Rebuild the Firebase Android validation APK and upload the new APK to Internal App Sharing again. Google will continue using the same Internal App Sharing test certificate for this app.
+Rebuild the Firebase Android validation workflow and upload the new AAB to Internal App Sharing again. Google will continue using the same Internal App Sharing test certificate for this app.
 
 This step is required so Google Sign-In works in the Google-re-signed Internal App Sharing build.
 
-### 5. Enable Internal App Sharing on the tester device
+### 6. Enable Internal App Sharing on the tester device
 
 On the Android test phone:
 
@@ -88,6 +86,14 @@ On the Android test phone:
 6. Install Invite from Google Play.
 
 Use this build for Play-delivery smoke testing: installation, launch, Firebase email/password, Google Sign-In, session persistence, password reset, and API/MongoDB behavior.
+
+## Automating Internal App Sharing from GitHub later
+
+Google Play Developer API exposes `internalappsharingartifacts.uploadbundle`, so after Play API/service-account access is configured, GitHub Actions can upload the AAB automatically and return the generated download URL.
+
+Do not put a Google service-account JSON key in the repository. Store deployment credentials only in GitHub Actions secrets or use a workload-identity approach if configured later.
+
+The one-time manual Internal App Sharing upload is still useful because it establishes the Internal App Sharing test certificate that Firebase must trust for Google Sign-In.
 
 ## Release-like route: Internal testing track
 
@@ -133,7 +139,7 @@ Keep these certificates separate:
 | Certificate | Purpose | Register with Firebase for Google Sign-In? |
 | --- | --- | --- |
 | Repository validation APK SHA-1 | GitHub-built sideload/emulator APK | Yes, for that APK |
-| Internal App Sharing SHA-1 | APKs re-signed by Internal App Sharing | Yes, for Internal App Sharing tests |
+| Internal App Sharing SHA-1 | Artifacts re-signed by Internal App Sharing | Yes, for Internal App Sharing tests |
 | Upload key SHA-1 | Authenticates uploads to Play Console | No, not normally the installed app identity |
 | Play App Signing SHA-1 | APKs delivered by Play testing/production tracks | Yes, required for Play-distributed Google Sign-In |
 
@@ -159,3 +165,4 @@ Do not promote the Firebase migration to `main` solely because Play accepted an 
 - Play App Signing: https://support.google.com/googleplay/android-developer/answer/9842756
 - Personal-account testing requirements: https://support.google.com/googleplay/android-developer/answer/14151465
 - Create and set up an app: https://support.google.com/googleplay/android-developer/answer/9859152
+- Google Play Developer API: https://developers.google.com/android-publisher/api-ref/rest
