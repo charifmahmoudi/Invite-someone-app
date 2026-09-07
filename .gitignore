@@ -18,6 +18,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Google GitHub Actions temporary credentials
+gha-creds-*.json
+
 # Metro
 .metro-health-check*
 
