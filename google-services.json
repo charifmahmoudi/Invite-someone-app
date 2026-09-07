@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "367720887571-k2e60h8hmh7fic5e0e187et7qu1i8d6c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.charifmahmoudi.invite",
+            "certificate_hash": "44a27201d013dea379d14192676c52892010e656"
+          }
+        },
+        {
           "client_id": "367720887571-146t2h6ub1vips2mqjjih7ivajg80ar3.apps.googleusercontent.com",
           "client_type": 3
         }
