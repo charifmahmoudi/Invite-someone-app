@@ -1,0 +1,87 @@
+name: Firebase Account Collision Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['impl/firebase-auth']
+    paths:
+      - '.github/workflows/firebase-account-collision-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  collision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      E2E_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify existing-email collision is not linked
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FIREBASE_WEB_API_KEY="$(jq -er '.client[0].api_key[0].current_key' google-services.json)"
+          EMAIL='invite-collision-smoke@example.com'
+          PASSWORD="Invite-Collision-${GITHUB_RUN_ID}-Aa9!"
+          ID_TOKEN=''
+
+          cleanup() {
+            if [ -n "$ID_TOKEN" ]; then
+              curl --silent --show-error \
+                --request POST \
+                --header 'Content-Type: application/json' \
+                --data "$(jq -nc --arg token "$ID_TOKEN" '{idToken:$token}')" \
+                "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${FIREBASE_WEB_API_KEY}" \
+                >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail "$E2E_API_URL/health" | grep -Fq '"status":"ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo 'Firebase E2E API did not become healthy.' >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          SIGNUP_PAYLOAD="$(jq -nc --arg email "$EMAIL" --arg password "$PASSWORD" '{email:$email,password:$password,returnSecureToken:true}')"
+          SIGNUP_RESPONSE="$(curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$SIGNUP_PAYLOAD" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_WEB_API_KEY}")"
+          ID_TOKEN="$(jq -er '.idToken' <<<"$SIGNUP_RESPONSE")"
+
+          PROVISION_PAYLOAD="$(jq -nc '{name:"Collision Smoke Firebase",city:"Berlin",interests:["Coffee"],availability:["Saturday"],connectionGoals:["New friends"]}')"
+          STATUS="$(curl --silent --show-error \
+            --output /tmp/collision-response.json \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer ${ID_TOKEN}" \
+            --data "$PROVISION_PAYLOAD" \
+            "$E2E_API_URL/v1/auth/provision")"
+
+          test "$STATUS" = '409'
+          test "$(jq -r '.code' /tmp/collision-response.json)" = 'ACCOUNT_LINK_REQUIRED'
+
+          DELETE_PAYLOAD="$(jq -nc --arg token "$ID_TOKEN" '{idToken:$token}')"
+          curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$DELETE_PAYLOAD" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${FIREBASE_WEB_API_KEY}" \
+            >/dev/null
+          ID_TOKEN=''
+
+          echo 'Existing Invite email correctly returned ACCOUNT_LINK_REQUIRED; no automatic link occurred.'
