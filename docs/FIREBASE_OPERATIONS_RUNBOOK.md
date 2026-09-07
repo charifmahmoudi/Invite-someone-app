@@ -1,6 +1,6 @@
 # Firebase operations and mobile testing runbook
 
-This is the operator-facing runbook for Invite's Firebase authentication migration. It explains how to build and install the Android test app, create and verify users, test email/password and Google sign-in, inspect the MongoDB identity mapping, operate the isolated Render environment, diagnose failures, and decide whether a release is safe to promote.
+This is the operator-facing runbook for Invite's Firebase authentication migration. It explains how to build and install the Android test app, test primarily in a Google-Play-enabled Android emulator, run the smaller final physical-device acceptance pass, create and verify users, test email/password and Google sign-in, inspect the MongoDB identity mapping, operate the isolated Render environment, diagnose failures, and decide whether a release is safe to promote.
 
 For architecture and trust boundaries, see [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md), [TESTING.md](./TESTING.md), and [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -53,7 +53,35 @@ userId = stable internal Invite member ID
 
 A Firebase user can exist before an Invite member exists. Invite intentionally waits for verified email plus profile onboarding before provisioning the MongoDB member.
 
-## Preflight before a phone test
+## Test strategy: emulator first, physical phone last
+
+Use a Google-Play-enabled Android emulator as the primary acceptance environment. It is fast, reproducible, easy to reset, and can exercise nearly all of the Firebase migration flow before a physical phone is involved.
+
+The emulator is the default environment for:
+
+- app installation and startup;
+- Firebase email/password registration and sign-in;
+- verification-state handling;
+- onboarding/profile provisioning;
+- Firebase ID token -> Express -> MongoDB integration;
+- session restoration after process/app restart;
+- sign-out;
+- password-reset flow;
+- Google Sign-In when the Android Virtual Device includes Google Play services and is signed into a Google account;
+- duplicate-profile and stable identity behavior;
+- API and MongoDB verification.
+
+A physical Android phone remains a final release gate for the smaller set of behaviors that an emulator cannot fully prove:
+
+- real device browser/email-app handoff for verification and password-reset links;
+- Google account chooser behavior on real hardware;
+- process/background/sleep behavior on a real device;
+- real network changes and connectivity interruptions;
+- installation/startup behavior outside the emulator.
+
+Do not repeat the full test suite on the phone if the emulator suite already passed. The final phone pass should be short and targeted.
+
+## Preflight before an emulator/device test
 
 Confirm these items before testing:
 
@@ -115,45 +143,78 @@ The workflow checks that:
 - the JavaScript bundle is embedded;
 - the APK is signed by the expected E2E signing certificate.
 
-It does **not** prove that a real Firebase user can complete email verification or that Google OAuth is correctly configured in the Google console. Those require the device tests below.
+It does **not** prove that a real Firebase user can complete email verification or that Google OAuth is correctly configured in the Google console. Those require the emulator/device tests below.
 
-## Install the APK on a physical Android phone
+## Primary path: install and test on an Android emulator
 
-Use a real Android phone for the hosted Firebase smoke because Google Play services, browser/email handoff and persisted sessions matter.
+Use Android Studio's Device Manager and choose an Android Virtual Device image that explicitly includes **Google Play**. A plain AOSP image is not sufficient for the Google Sign-In smoke because it does not include the required Google Play services stack.
 
-### Option A: install directly on the phone
+Recommended setup:
 
-1. Download the GitHub artifact ZIP.
-2. Extract `app-release.apk`.
-3. Transfer the APK to the Android phone using a private method you trust.
-4. Open the APK on the phone.
-5. Android may ask to allow this browser/file manager to install unknown apps. Allow it for this installation only if needed.
-6. Install Invite.
-7. After installation, revoke the "install unknown apps" permission if you do not normally use it.
+1. Install/open Android Studio.
+2. Open **Tools -> Device Manager**.
+3. Choose **Create device**.
+4. Select a recent Pixel device profile.
+5. Select a recent Android system image that shows the **Google Play** label/icon.
+6. Create and start the virtual device.
+7. Open the Play Store in the emulator and sign in with a Google test account if Google Sign-In will be tested.
+8. Download and unzip the GitHub artifact `invite-firebase-android-e2e`.
+9. Install `app-release.apk` using either method below.
 
-### Option B: install with ADB
+### Emulator install option A: drag and drop
 
-Enable Developer Options and USB debugging on the phone, connect it to the computer, then run:
+With the emulator running, drag `app-release.apk` from the computer onto the emulator window. Android should install it automatically.
+
+### Emulator install option B: ADB
 
 ```bash
 adb devices
 adb install -r app-release.apk
 ```
 
-If an older build with incompatible signing is installed, uninstall that test build first. Uninstalling clears that app's local session/state.
+If an incompatible older test build is installed:
+
+```bash
+adb uninstall com.charifmahmoudi.invite
+adb install app-release.apk
+```
+
+Uninstalling clears the app's local session/state, which is useful for a clean first-run test.
+
+### Emulator reset guidance
+
+For a clean test without changing Firebase/MongoDB data, clear only local app state:
+
+```bash
+adb shell pm clear com.charifmahmoudi.invite
+```
+
+For a completely fresh emulator, use **Wipe Data** from Android Studio Device Manager. Remember that wiping the emulator also removes the Google account from the virtual device.
+
+## Handling email links while using the emulator
+
+The easiest approach is to keep your test inbox open on the host computer:
+
+1. create/sign in to the test account inside Invite on the emulator;
+2. open the verification/reset email on the host computer;
+3. complete the Firebase-hosted verification or reset page in the host browser;
+4. return to Invite in the emulator;
+5. tap the app's refresh/verification action as documented below.
+
+This proves the Firebase server-side email action and the app's refreshed auth state. The final physical-phone pass separately verifies real Android email/browser handoff.
 
 ## Recommended test-user creation: create the user in Invite
 
 This is the best test because it exercises the real client flow.
 
-1. Open the Firebase E2E APK.
+1. Open the Firebase E2E APK in the emulator.
 2. Choose **Create a profile**.
 3. Enter a test email inbox you can access and a password with at least 8 characters.
 4. Tap **Create account**.
 5. Invite calls Firebase `createUserWithEmailAndPassword` and sends a verification email.
-6. Leave Invite installed/running and open the verification email.
+6. Open the verification email on the host computer or emulator.
 7. Open the Firebase verification link.
-8. Return to Invite.
+8. Return to Invite in the emulator.
 9. Tap **I've verified my email**.
 10. Complete name, city, interests, availability and connection goals.
 11. Tap **Create my profile**.
@@ -182,7 +243,7 @@ Important: adding the Firebase user does not create an Invite MongoDB member and
 
 To finish the normal Invite flow:
 
-1. Open Invite on the phone.
+1. Open Invite in the emulator.
 2. Sign in with the Firebase console-created email/password.
 3. If the Firebase user is not verified, Invite routes to the verification state.
 4. Tap **Resend verification email** if needed.
@@ -253,63 +314,71 @@ npm run server:indexes
 
 The server also supports `MONGODB_ENSURE_INDEXES_ON_START=true` for an explicit bootstrap deployment. Leave it `false` for normal operation after the indexes are established; the API is intentionally designed not to maintain indexes on every scale-to-zero cold start.
 
-## Email/password release smoke
+## Email/password emulator smoke
 
-Run this exact sequence on a physical Android phone:
+Run this full sequence in the Google-Play-enabled emulator:
 
-1. Fresh install or sign out.
+1. Fresh install/clear local app data or sign out.
 2. Create a new account.
 3. Confirm verification email arrives.
 4. Before clicking the link, confirm Invite does not provision the MongoDB profile.
-5. Click verification link.
+5. Click verification link on the host computer or emulator.
 6. Return to Invite and refresh verification.
 7. Complete onboarding.
 8. Confirm MongoDB member + identity mapping.
 9. Sign out.
 10. Sign back in with the same email/password.
 11. Confirm the same Invite profile opens.
-12. Force-close Invite.
+12. Force-stop Invite:
+
+```bash
+adb shell am force-stop com.charifmahmoudi.invite
+```
+
 13. Reopen it and confirm the Firebase session is restored.
 14. Sign out again and confirm protected Invite data is no longer available.
 
 Pass condition: one Firebase UID always resolves to one stable Invite user ID.
 
-## Password-reset smoke
+## Password-reset emulator smoke
 
 1. Sign out.
 2. Open **Sign in**.
 3. Enter the test email.
 4. Tap **Forgot password?**.
 5. Confirm the app reports that reset instructions were requested without exposing whether an arbitrary account exists.
-6. Open the reset email.
+6. Open the reset email on the host computer or emulator.
 7. Set a new password.
-8. Sign in with the new password.
+8. Sign in with the new password in the emulator.
 9. Confirm the same Invite profile is loaded.
 
 Do not store a real tester password in repository files or screenshots.
 
-## Google Sign-In smoke
+## Google Sign-In emulator smoke
 
 Google should be a manual release smoke, not the routine automated CI login path.
 
+Use only an emulator system image that includes Google Play services.
+
 1. Verify the Android OAuth client exists for the package + SHA-1 listed above.
-2. Install the latest `invite-firebase-android-e2e` APK.
-3. Open **Sign in**.
-4. Tap **Continue with Google**.
-5. Select a Google account that is allowed to use the test OAuth application.
-6. Complete any Google consent screen.
-7. Invite exchanges the Google ID token for a Firebase credential.
-8. For a new identity, complete Invite onboarding.
-9. Sign out and repeat Google sign-in.
-10. Confirm it returns to the same Invite member.
+2. Confirm the emulator is signed into a Google test account.
+3. Install the latest `invite-firebase-android-e2e` APK.
+4. Open **Sign in**.
+5. Tap **Continue with Google**.
+6. Select a Google account that is allowed to use the test OAuth application.
+7. Complete any Google consent screen.
+8. Invite exchanges the Google ID token for a Firebase credential.
+9. For a new identity, complete Invite onboarding.
+10. Sign out and repeat Google sign-in.
+11. Confirm it returns to the same Invite member.
 
 Common failure:
 
 ```text
-DEVELOPER_ERROR / configuration error
+DEVELOPER_ERROR / ApiException: 10 / configuration error
 ```
 
-First check the Android OAuth client package name and SHA-1. A successful APK compile alone does not prove this console-side registration.
+First check the Android OAuth client package name and SHA-1, then confirm the emulator image includes Google Play services. A successful APK compile alone does not prove console-side OAuth registration.
 
 ## Account-collision safety smoke
 
@@ -322,6 +391,44 @@ This test protects legacy users from account takeover by email matching.
 5. Confirm no `user_identities` mapping was silently created for the pre-existing member.
 
 Email equality is not proof that both credentials are controlled by the same person.
+
+## Final physical Android phone acceptance pass
+
+Run this only after the emulator suite is green. This is intentionally shorter than the emulator suite.
+
+1. Install the exact same validated `app-release.apk` on a real Android phone.
+2. Create or use a dedicated test account.
+3. Trigger an email verification message from Invite.
+4. Open the verification message in the phone's normal email app and complete the browser handoff.
+5. Return to Invite and confirm verification refresh/onboarding works.
+6. Force-close/reopen Invite and confirm the session restores.
+7. Sign out and perform one Google Sign-In using the real device account chooser.
+8. Confirm the same Invite member is restored after signing out and signing in again.
+9. Trigger one password reset and confirm the phone email/browser flow works.
+10. Briefly test network recovery by backgrounding Invite, toggling Wi-Fi/mobile connectivity as appropriate, reopening the app and confirming it fails/retries sensibly rather than corrupting the session.
+
+This phone pass exists to catch real-device integration differences. It is not necessary to recreate all emulator fixtures or rerun every MongoDB inspection if the same APK already passed those checks.
+
+### Install directly on the phone
+
+1. Download the GitHub artifact ZIP.
+2. Extract `app-release.apk`.
+3. Transfer the APK to the Android phone using a private method you trust.
+4. Open the APK on the phone.
+5. Android may ask to allow this browser/file manager to install unknown apps. Allow it for this installation only if needed.
+6. Install Invite.
+7. After installation, revoke the "install unknown apps" permission if you do not normally use it.
+
+### Install on the phone with ADB
+
+Enable Developer Options and USB debugging on the phone, connect it to the computer, then run:
+
+```bash
+adb devices
+adb install -r app-release.apk
+```
+
+If an older build with incompatible signing is installed, uninstall that test build first. Uninstalling clears that app's local session/state.
 
 ## Operate the isolated Render Firebase API
 
@@ -367,7 +474,7 @@ Check:
 - `AUTH_MODE=firebase`;
 - `FIREBASE_PROJECT_ID=invite-someone-app`;
 - token came from the same Firebase project;
-- device clock is reasonable;
+- emulator/device clock is reasonable;
 - Firebase session was refreshed after email verification.
 
 Never log the full ID token while diagnosing.
@@ -402,15 +509,16 @@ Do not fast-forward the Firebase migration to `main` until every required item i
 - [ ] Hosted E2E API health smoke passes.
 - [ ] Unauthenticated `/v1/me` returns 401.
 - [ ] Required MongoDB indexes exist in the isolated database.
-- [ ] Email/password registration passes on a physical phone.
+- [ ] Email/password registration passes in a Google-Play-enabled Android emulator.
 - [ ] Unverified email cannot provision an Invite profile.
 - [ ] Email verification + onboarding creates one member and one identity mapping.
 - [ ] Returning email/password sign-in restores the same Invite member.
-- [ ] Password reset passes.
-- [ ] Session survives app restart.
+- [ ] Password reset passes in the emulator.
+- [ ] Session survives emulator app/process restart.
 - [ ] Sign-out clears the managed session.
-- [ ] Google Sign-In passes on Android.
+- [ ] Google Sign-In passes in a Google-Play-enabled Android emulator.
 - [ ] Existing-email collision returns `ACCOUNT_LINK_REQUIRED`.
+- [ ] Short final physical-phone acceptance pass succeeds for email/browser handoff, Google account chooser, session restoration and password reset.
 - [ ] No secrets were added to GitHub, the APK, logs or docs.
 - [ ] A compatible production client rollout strategy exists before the production API auth switch.
 
@@ -437,6 +545,8 @@ These provider pages were rechecked during the September 2026 migration work:
 - Firebase manage users: https://firebase.google.com/docs/auth/web/manage-users
 - Firebase users/auth lifecycle: https://firebase.google.com/docs/auth/users
 - Google Android client authentication/SHA-1: https://developers.google.com/android/guides/client-auth
-- Expo APK installation on devices: https://docs.expo.dev/build-reference/apk/
+- Android Studio emulator/device manager: https://developer.android.com/studio/run/managing-avds
+- Android emulator Google Play system images: https://developer.android.com/studio/run/managing-avds#system-image
+- Expo APK installation on devices/emulators: https://docs.expo.dev/build-reference/apk/
 
 Provider console labels change over time. When a dashboard label differs from this runbook, confirm the current official provider documentation before changing production configuration.
