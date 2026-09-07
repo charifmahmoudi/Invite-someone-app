@@ -139,6 +139,7 @@ jobs:
           echo "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/play-upload.jks
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('android/app/build.gradle')
           text = path.read_text()
@@ -147,18 +148,55 @@ jobs:
               raise SystemExit('Could not locate signingConfigs block in generated build.gradle')
           release_config = '''    signingConfigs {\n        playRelease {\n            storeFile file(System.getenv("PLAY_UPLOAD_KEYSTORE_FILE"))\n            storePassword System.getenv("PLAY_UPLOAD_STORE_PASSWORD")\n            keyAlias System.getenv("PLAY_UPLOAD_KEY_ALIAS")\n            keyPassword System.getenv("PLAY_UPLOAD_KEY_PASSWORD")\n        }\n'''
           text = text.replace(marker, release_config, 1)
-          release_anchor = '        release {\n            signingConfig signingConfigs.debug\n'
-          if release_anchor not in text:
-              raise SystemExit('Could not locate release signingConfig in generated build.gradle')
-          text = text.replace(
-              release_anchor,
-              '        release {\n            signingConfig signingConfigs.playRelease\n',
-              1,
+
+          def block_span(source, pattern, label):
+              match = re.search(pattern, source, re.MULTILINE)
+              if not match:
+                  raise SystemExit(f'Could not locate {label} in generated build.gradle')
+              brace_start = source.find('{', match.start())
+              depth = 0
+              for index in range(brace_start, len(source)):
+                  if source[index] == '{':
+                      depth += 1
+                  elif source[index] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return match.start(), index + 1
+              raise SystemExit(f'Could not determine {label} block in generated build.gradle')
+
+          build_start, build_end = block_span(
+              text,
+              r'^\s*buildTypes\s*\{',
+              'buildTypes block',
           )
+          build_block = text[build_start:build_end]
+          release_start, release_end = block_span(
+              build_block,
+              r'^\s*release\s*\{',
+              'release buildType',
+          )
+          release_block = build_block[release_start:release_end]
+          release_block, replacements = re.subn(
+              r'\bsigningConfig\s+signingConfigs\.debug\b',
+              'signingConfig signingConfigs.playRelease',
+              release_block,
+              count=1,
+          )
+          if replacements != 1:
+              raise SystemExit('Could not locate release signingConfig in generated build.gradle')
+          build_block = (
+              build_block[:release_start]
+              + release_block
+              + build_block[release_end:]
+          )
+          text = text[:build_start] + build_block + text[build_end:]
+
+          if 'playRelease {' not in text:
+              raise SystemExit('Play release signingConfig was not created')
+          if 'signingConfig signingConfigs.playRelease' not in release_block:
+              raise SystemExit('Release buildType was not assigned to Play signingConfig')
           path.write_text(text)
           PY
-          grep -Fq 'playRelease {' android/app/build.gradle
-          grep -A2 -F 'release {' android/app/build.gradle | grep -Fq 'signingConfig signingConfigs.playRelease'
 
       - name: Build Play release app bundle
         if: ${{ steps.play-signing.outputs.available == 'true' }}
