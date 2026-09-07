@@ -170,7 +170,8 @@ jobs:
           set -euo pipefail
           AAB=android/app/build/outputs/bundle/release/app-release.aab
           test -f "$AAB"
-          unzip -Z1 "$AAB" | grep -Fq 'base/manifest/AndroidManifest.xml'
+          unzip -Z1 "$AAB" > /tmp/aab-entries.txt
+          grep -Fxq 'base/manifest/AndroidManifest.xml' /tmp/aab-entries.txt
           jarsigner -verify -verbose -certs "$AAB" >/tmp/aab-signature.txt
           keytool -printcert -jarfile "$AAB" | tee /tmp/aab-certificate.txt
           if grep -Fqi 'Android Debug' /tmp/aab-certificate.txt; then
