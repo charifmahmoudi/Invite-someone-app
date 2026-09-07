@@ -32,6 +32,7 @@ jobs:
       EXPO_PUBLIC_FIREBASE_APP_ID: '1:367720887571:web:fa9518d2e19ac3fae816e6'
       GOOGLE_CLOUD_PROJECT_ID: invite-someone-app
       GOOGLE_PLAY_PACKAGE_NAME: com.charifmahmoudi.invite
+      GOOGLE_PLAY_TRACK: internal
 
     steps:
       - name: Check out repository
@@ -248,19 +249,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Explain skipped Play deployment
-        if: ${{ steps.play-signing.outputs.available == 'true' && vars.GOOGLE_PLAY_CICD_ENABLED != 'true' }}
-        run: |
-          {
-            echo '### Google Play deployment'
-            echo ''
-            echo 'The release-signed AAB was built, but automatic Play upload is not enabled yet.'
-            echo 'Complete the one-time Google Cloud/Play Console setup and set repository variable `GOOGLE_PLAY_CICD_ENABLED=true`.'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Authenticate to Google Cloud for Play upload
+      - name: Authenticate to Google Cloud for Play Internal testing
         id: play-auth
-        if: ${{ steps.play-signing.outputs.available == 'true' && vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
         uses: google-github-actions/auth@v3
         with:
           project_id: invite-someone-app
@@ -270,42 +261,109 @@ jobs:
           access_token_scopes: https://www.googleapis.com/auth/androidpublisher
           create_credentials_file: false
 
-      - name: Upload app bundle to Google Play Internal App Sharing
-        if: ${{ steps.play-signing.outputs.available == 'true' && vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
+      - name: Upload and release to Google Play Internal testing
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
         env:
           GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.play-auth.outputs.access_token }}
         run: |
           set -euo pipefail
+
           AAB=android/app/build/outputs/bundle/release/app-release.aab
-          RESPONSE=/tmp/google-play-internal-sharing.json
-          HTTP_STATUS="$(curl --silent --show-error \
-            --output "$RESPONSE" \
-            --write-out '%{http_code}' \
+          API_ROOT="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}"
+          UPLOAD_ROOT="https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}"
+
+          api_error() {
+            local label="$1"
+            local file="$2"
+            echo "::error title=Google Play Internal testing::${label}"
+            if [ -f "$file" ]; then
+              cat "$file" >&2
+            fi
+            exit 1
+          }
+
+          EDIT_RESPONSE=/tmp/google-play-edit.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$EDIT_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "${API_ROOT}/edits"; then
+            api_error 'Could not create Google Play edit.' "$EDIT_RESPONSE"
+          fi
+
+          EDIT_ID="$(jq -r '.id // empty' "$EDIT_RESPONSE")"
+          if [ -z "$EDIT_ID" ]; then
+            api_error 'Google Play edit response did not contain an edit ID.' "$EDIT_RESPONSE"
+          fi
+
+          BUNDLE_RESPONSE=/tmp/google-play-bundle.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$BUNDLE_RESPONSE" \
             --request POST \
             --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
             --header 'Content-Type: application/octet-stream' \
             --data-binary @"$AAB" \
-            "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/internalappsharing/${GOOGLE_PLAY_PACKAGE_NAME}/artifacts/bundle?uploadType=media")"
-
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
-            echo "Google Play Internal App Sharing upload failed with HTTP $HTTP_STATUS" >&2
-            cat "$RESPONSE" >&2
-            exit 1
+            "${UPLOAD_ROOT}/edits/${EDIT_ID}/bundles?uploadType=media"; then
+            api_error 'AAB upload to Google Play failed.' "$BUNDLE_RESPONSE"
           fi
 
-          DOWNLOAD_URL="$(jq -r '.downloadUrl // empty' "$RESPONSE")"
-          CERT_SHA256="$(jq -r '.certificateFingerprint // empty' "$RESPONSE")"
-          ARTIFACT_SHA256="$(jq -r '.sha256 // empty' "$RESPONSE")"
-          test -n "$DOWNLOAD_URL"
-          test -n "$CERT_SHA256"
-          test -n "$ARTIFACT_SHA256"
+          VERSION_CODE="$(jq -r '.versionCode // empty' "$BUNDLE_RESPONSE")"
+          if [ -z "$VERSION_CODE" ]; then
+            api_error 'Google Play bundle response did not contain a version code.' "$BUNDLE_RESPONSE"
+          fi
+
+          TRACK_REQUEST=/tmp/google-play-track-request.json
+          jq -n \
+            --arg track "$GOOGLE_PLAY_TRACK" \
+            --arg versionCode "$VERSION_CODE" \
+            --arg releaseName "Invite Internal ${GITHUB_RUN_NUMBER}" \
+            '{
+              track: $track,
+              releases: [
+                {
+                  name: $releaseName,
+                  versionCodes: [$versionCode],
+                  status: "completed"
+                }
+              ]
+            }' > "$TRACK_REQUEST"
+
+          TRACK_RESPONSE=/tmp/google-play-track.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$TRACK_RESPONSE" \
+            --request PUT \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data-binary @"$TRACK_REQUEST" \
+            "${API_ROOT}/edits/${EDIT_ID}/tracks/${GOOGLE_PLAY_TRACK}"; then
+            api_error 'Could not assign the uploaded AAB to the Internal testing track.' "$TRACK_RESPONSE"
+          fi
+
+          VALIDATE_RESPONSE=/tmp/google-play-validate.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$VALIDATE_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            "${API_ROOT}/edits/${EDIT_ID}:validate"; then
+            api_error 'Google Play rejected the Internal testing edit during validation.' "$VALIDATE_RESPONSE"
+          fi
+
+          COMMIT_RESPONSE=/tmp/google-play-commit.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$COMMIT_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            "${API_ROOT}/edits/${EDIT_ID}:commit"; then
+            api_error 'Google Play rejected the Internal testing release commit.' "$COMMIT_RESPONSE"
+          fi
 
           {
-            echo '### Google Play Internal App Sharing'
+            echo '### Google Play Internal testing'
             echo ''
-            echo "- Install link: [$DOWNLOAD_URL]($DOWNLOAD_URL)"
-            echo "- Internal App Sharing certificate SHA-256: \`$CERT_SHA256\`"
-            echo "- Uploaded artifact SHA-256: \`$ARTIFACT_SHA256\`"
-            echo ''
-            echo '> For Firebase Google Sign-In, copy the Internal test certificate SHA-1 from Play Console after the first successful upload.'
+            echo "- Track: \`${GOOGLE_PLAY_TRACK}\`"
+            echo "- Version code: \`${VERSION_CODE}\`"
+            echo "- Release: \`Invite Internal ${GITHUB_RUN_NUMBER}\`"
+            echo '- Result: AAB uploaded, edit validated, and release committed to Internal testing.'
           } >> "$GITHUB_STEP_SUMMARY"
