@@ -44,6 +44,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Smoke isolated Firebase API
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail "$EXPO_PUBLIC_API_URL/health" | grep -Fq '"status":"ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "Firebase E2E API did not become healthy." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          STATUS="$(curl --silent --show-error --output /tmp/unauthenticated-me.json --write-out '%{http_code}' "$EXPO_PUBLIC_API_URL/v1/me")"
+          test "$STATUS" = '401'
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
         env:
