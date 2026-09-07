@@ -54,7 +54,9 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.4` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
 
-The default preview remains on the compatibility API until a Firebase-enabled client and API are deliberately cut over together. See [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md).
+The default preview remains on the compatibility API until a Firebase-enabled client and API are deliberately cut over together.
+
+Firebase migration testing uses the on-demand [Validate Firebase Android workflow](./.github/workflows/validate-firebase-android.yml). It targets the isolated Firebase E2E API, checks the hosted API boundary, builds the native Firebase/Google-enabled APK, verifies its signing certificate, and uploads the `invite-firebase-android-e2e` artifact for physical-device testing. See the [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md) for installation and acceptance steps.
 
 The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
 
@@ -91,7 +93,7 @@ Firebase is an identity provider only. MongoDB remains authoritative for profile
 
 The Express API maps each Firebase UID to an internal Invite user ID, so authentication-provider IDs do not leak throughout the domain model.
 
-See [Architecture](./docs/ARCHITECTURE.md) and [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md).
+See [Architecture](./docs/ARCHITECTURE.md), [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md), and the [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md).
 
 ## Connect MongoDB and the API
 
@@ -115,13 +117,9 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:web:example
 ```
 
-Google sign-in is enabled per platform with public OAuth client IDs:
+Android Google sign-in is configured natively with `google-services.json`, a Web OAuth client for ID-token issuance, and a Google OAuth **Android** client registered for `com.charifmahmoudi.invite` plus the certificate SHA-1 used to sign that build. Android does not require an OAuth client secret or `EXPO_PUBLIC_GOOGLE_*` variables.
 
-```bash
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=...apps.googleusercontent.com
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...apps.googleusercontent.com
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...apps.googleusercontent.com
-```
+Every Android signing channel can have a different SHA-1. The staging/development APK fingerprint must not be assumed to equal the future Google Play App Signing fingerprint.
 
 Never put MongoDB credentials, OAuth client secrets, Firebase service-account JSON, or private keys in `EXPO_PUBLIC_*` variables.
 
@@ -150,6 +148,7 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 - [User stories and acceptance criteria](./docs/USER_STORIES.md)
 - [Architecture](./docs/ARCHITECTURE.md)
 - [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md)
+- [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md)
 - [MongoDB backend setup](./docs/MONGODB_BACKEND.md)
 - [Data model and security rules](./docs/DATA_MODEL.md)
 - [Testing strategy](./docs/TESTING.md)
