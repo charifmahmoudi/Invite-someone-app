@@ -2,7 +2,7 @@
 
 Invite uses Firebase Authentication for identity only. The Express API remains the authorization and business-logic boundary, and MongoDB Atlas remains the application database.
 
-This document explains the architecture and configuration. For the repeatable operator procedure—building an APK, installing it on a physical Android phone, adding users, testing verification/password reset/Google sign-in, inspecting MongoDB, operating the isolated Render service, troubleshooting, and release acceptance—use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
+For current migration progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). This document explains architecture and configuration only. For the repeatable operator procedure—building an APK, emulator-first acceptance, the short final phone smoke, adding users, testing verification/password reset/Google sign-in, inspecting MongoDB, operating the isolated Render service, troubleshooting, and release acceptance—use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
 
 ## Runtime modes
 
@@ -131,9 +131,10 @@ Invite domain state is reloaded after authentication, provisioning, or account c
 4. Configure the isolated Invite API with `AUTH_MODE=firebase` and `FIREBASE_PROJECT_ID=invite-someone-app`.
 5. Run required MongoDB index maintenance against the isolated auth database.
 6. Run the hosted Firebase-token boundary smoke.
-7. Follow [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) for physical-phone registration, email verification, password reset, session persistence, Google sign-in, MongoDB identity mapping, and collision-safety acceptance tests.
-8. Ship a Firebase-enabled production build before switching the production API away from internal compatibility auth.
-9. Retire internal password/JWT issuance only after unsupported legacy clients can no longer reach the production API.
+7. Follow [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) for emulator-first registration, email verification, password reset, session persistence, Google sign-in, MongoDB identity mapping and collision-safety tests, then run the short final physical-phone smoke.
+8. Test Play-distributed installation/signing as described in [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
+9. Ship a Firebase-enabled production build before switching the production API away from internal compatibility auth.
+10. Retire internal password/JWT issuance only after unsupported legacy clients can no longer reach the production API.
 
 ## Still intentionally out of scope
 
