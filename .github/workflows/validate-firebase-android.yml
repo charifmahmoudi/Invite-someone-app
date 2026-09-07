@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   android:
@@ -29,6 +30,8 @@ jobs:
       EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: invite-someone-app.firebasestorage.app
       EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '367720887571'
       EXPO_PUBLIC_FIREBASE_APP_ID: '1:367720887571:web:fa9518d2e19ac3fae816e6'
+      GOOGLE_CLOUD_PROJECT_ID: invite-someone-app
+      GOOGLE_PLAY_PACKAGE_NAME: com.charifmahmoudi.invite
 
     steps:
       - name: Check out repository
@@ -113,3 +116,65 @@ jobs:
           path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
+
+      - name: Explain skipped Play deployment
+        if: ${{ vars.GOOGLE_PLAY_CICD_ENABLED != 'true' }}
+        run: |
+          {
+            echo '### Google Play Internal App Sharing'
+            echo ''
+            echo 'Automatic upload is not enabled yet.'
+            echo 'Complete the one-time Google Cloud/Play Console setup and set repository variable `GOOGLE_PLAY_CICD_ENABLED=true`.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Authenticate to Google Cloud for Play upload
+        id: play-auth
+        if: ${{ vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: invite-someone-app
+          workload_identity_provider: projects/367720887571/locations/global/workloadIdentityPools/github-play/providers/invite-repo
+          service_account: invite-play-ci@invite-someone-app.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+
+      - name: Upload app bundle to Google Play Internal App Sharing
+        if: ${{ vars.GOOGLE_PLAY_CICD_ENABLED == 'true' }}
+        env:
+          GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.play-auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          RESPONSE=/tmp/google-play-internal-sharing.json
+          HTTP_STATUS="$(curl --silent --show-error \
+            --output "$RESPONSE" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/octet-stream' \
+            --data-binary @"$AAB" \
+            "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/internalappsharing/${GOOGLE_PLAY_PACKAGE_NAME}/artifacts/bundle?uploadType=media")"
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "Google Play Internal App Sharing upload failed with HTTP $HTTP_STATUS" >&2
+            cat "$RESPONSE" >&2
+            exit 1
+          fi
+
+          DOWNLOAD_URL="$(jq -r '.downloadUrl // empty' "$RESPONSE")"
+          CERT_SHA256="$(jq -r '.certificateFingerprint // empty' "$RESPONSE")"
+          ARTIFACT_SHA256="$(jq -r '.sha256 // empty' "$RESPONSE")"
+          test -n "$DOWNLOAD_URL"
+          test -n "$CERT_SHA256"
+          test -n "$ARTIFACT_SHA256"
+
+          {
+            echo '### Google Play Internal App Sharing'
+            echo ''
+            echo "- Install link: [$DOWNLOAD_URL]($DOWNLOAD_URL)"
+            echo "- Internal App Sharing certificate SHA-256: \`$CERT_SHA256\`"
+            echo "- Uploaded artifact SHA-256: \`$ARTIFACT_SHA256\`"
+            echo ''
+            echo '> For Firebase Google Sign-In, copy the Internal test certificate SHA-1 from Play Console after the first successful upload.'
+          } >> "$GITHUB_STEP_SUMMARY"
