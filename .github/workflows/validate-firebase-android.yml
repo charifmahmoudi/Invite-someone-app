@@ -1,10 +1,18 @@
 name: Validate Firebase Android
 
 on:
+  workflow_dispatch:
   push:
     branches: ['impl/firebase-auth']
     paths:
       - '.github/workflows/validate-firebase-android.yml'
+      - 'app.json'
+      - 'google-services.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/auth/**'
+      - 'src/data/firebase.ts'
+      - 'src/app/(auth)/**'
 
 permissions:
   contents: read
