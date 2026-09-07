@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.charifmahmoudi.invite",
-      "versionCode": 4,
+      "versionCode": 5,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#EE6548",
