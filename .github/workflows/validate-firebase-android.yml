@@ -20,7 +20,7 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       EXPO_PUBLIC_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
       EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
@@ -78,17 +78,20 @@ jobs:
           test -f android/app/google-services.json
           grep -Fq 'com.charifmahmoudi.invite' android/app/google-services.json
 
-      - name: Build Firebase-enabled release APK
+      - name: Build Firebase-enabled release APK and Play test bundle
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon
+          ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon
 
-      - name: Verify embedded bundle and signing certificate
+      - name: Verify APK, app bundle, embedded bundle and signing certificate
         run: |
           APK=android/app/build/outputs/apk/release/app-release.apk
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
           test -f "$APK"
+          test -f "$AAB"
           unzip -Z1 "$APK" | grep -Fxq 'assets/index.android.bundle'
+          unzip -Z1 "$AAB" | grep -Fq 'base/manifest/AndroidManifest.xml'
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           test -n "$APKSIGNER"
           CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/.*SHA-1 digest: //p' | head -1 | tr '[:lower:]' '[:upper:]' | tr -d ':')"
@@ -100,5 +103,13 @@ jobs:
         with:
           name: invite-firebase-android-e2e
           path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Play test app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-firebase-play-test-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
