@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPO_PUBLIC_API_URL: https://invite-someone-api-clerk-dev.onrender.com
+      EXPO_PUBLIC_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
       EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
       EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: invite-someone-app.firebaseapp.com
       EXPO_PUBLIC_FIREBASE_PROJECT_ID: invite-someone-app
@@ -74,7 +74,7 @@ jobs:
       - name: Upload validation APK
         uses: actions/upload-artifact@v4
         with:
-          name: invite-firebase-android-validation
+          name: invite-firebase-android-e2e
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
