@@ -27,6 +27,17 @@ export type ManagedAuthStatus =
   | 'session-error'
   | 'backend-unavailable';
 
+type ResolvedManagedAuthStatus = Exclude<
+  ManagedAuthStatus,
+  'loading' | 'signed-out' | 'unverified'
+>;
+
+interface ManagedAuthResolution {
+  uid: string;
+  revision: number;
+  status: ResolvedManagedAuthStatus;
+}
+
 interface ManagedAuthValue {
   enabled: boolean;
   identityLoaded: boolean;
@@ -108,8 +119,8 @@ function ManagedAuthBlockingState({
 function FirebaseMongoBridge({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [identityLoaded, setIdentityLoaded] = useState(false);
-  const [status, setStatus] = useState<ManagedAuthStatus>('loading');
   const [inviteRevision, setInviteRevision] = useState(0);
+  const [resolution, setResolution] = useState<ManagedAuthResolution>();
 
   useEffect(() => {
     const auth = firebaseAuth;
@@ -126,40 +137,33 @@ function FirebaseMongoBridge({ children }: { children: React.ReactNode }) {
     if (!user) {
       // Firebase mode must never fall back to an old Invite-issued compatibility token.
       setMongoApiTokenProvider(async () => null);
-      setStatus('signed-out');
       return;
     }
 
     setMongoApiTokenProvider(async () => user.getIdToken());
-
-    if (!user.emailVerified) {
-      setStatus('unverified');
-      return;
-    }
+    if (!user.emailVerified) return;
 
     let active = true;
-    setStatus('loading');
+    const uid = user.uid;
+    const revision = inviteRevision;
+
     void loadMongoMe()
       .then(() => {
-        if (active) setStatus('ready');
+        if (active) setResolution({ uid, revision, status: 'ready' });
       })
       .catch((error: unknown) => {
         if (!active) return;
+        let status: ResolvedManagedAuthStatus = 'backend-unavailable';
         if (isInviteApiError(error)) {
           if (error.status === 403 && error.code === 'INVITE_PROFILE_REQUIRED') {
-            setStatus('profile-required');
-            return;
-          }
-          if (error.status === 409 && error.code === 'ACCOUNT_LINK_REQUIRED') {
-            setStatus('account-link-required');
-            return;
-          }
-          if (error.status === 401) {
-            setStatus('session-error');
-            return;
+            status = 'profile-required';
+          } else if (error.status === 409 && error.code === 'ACCOUNT_LINK_REQUIRED') {
+            status = 'account-link-required';
+          } else if (error.status === 401) {
+            status = 'session-error';
           }
         }
-        setStatus('backend-unavailable');
+        setResolution({ uid, revision, status });
       });
 
     return () => {
@@ -175,7 +179,6 @@ function FirebaseMongoBridge({ children }: { children: React.ReactNode }) {
   );
 
   const refreshInviteSession = useCallback(() => {
-    setStatus('loading');
     setInviteRevision((current) => current + 1);
   }, []);
 
@@ -184,6 +187,16 @@ function FirebaseMongoBridge({ children }: { children: React.ReactNode }) {
     if (!auth) return;
     void Promise.allSettled([signOut(auth), signOutGoogle()]);
   }, []);
+
+  const status: ManagedAuthStatus = !identityLoaded
+    ? 'loading'
+    : !user
+      ? 'signed-out'
+      : !user.emailVerified
+        ? 'unverified'
+        : resolution?.uid === user.uid && resolution.revision === inviteRevision
+          ? resolution.status
+          : 'loading';
 
   const managedAuth = useMemo<ManagedAuthValue>(
     () => ({
@@ -196,7 +209,7 @@ function FirebaseMongoBridge({ children }: { children: React.ReactNode }) {
     [identityLoaded, refreshInviteSession, status, user],
   );
 
-  if (!identityLoaded || status === 'loading') {
+  if (status === 'loading') {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={palette.primary} />
