@@ -89,7 +89,7 @@ jobs:
           npm run server:start > /tmp/invite-e2e-api.log 2>&1 &
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:4000/v1/e2e/ready \
-              -H "x-e2e-fixtures-token: $E2E_FIXTURES_TOKEN" >/dev/null; then
+              -H "Authorization: Bearer $E2E_FIXTURES_TOKEN" >/dev/null; then
               exit 0
             fi
             sleep 2
