@@ -1,0 +1,172 @@
+name: MVP Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'impl/mvp-hardening']
+    paths:
+      - '.github/workflows/mvp-quality.yml'
+      - '.maestro/**'
+      - 'scripts/mvp-android-smoke.sh'
+      - 'app.json'
+      - 'google-services.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/**'
+      - 'server/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mvp-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firebase-boundary:
+    name: Firebase -> API boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      E2E_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
+      FIREBASE_WEB_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
+
+    steps:
+      - name: Verify genuine Firebase token boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EMAIL="invite-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com"
+          PASSWORD="Invite-CI-${GITHUB_RUN_ID}-Aa9!"
+          ID_TOKEN=''
+
+          cleanup() {
+            if [ -n "$ID_TOKEN" ]; then
+              curl --silent --show-error \
+                --request POST \
+                --header 'Content-Type: application/json' \
+                --data "$(jq -nc --arg token "$ID_TOKEN" '{idToken:$token}')" \
+                "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${FIREBASE_WEB_API_KEY}" \
+                >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail "$E2E_API_URL/health" | grep -Fq '"status":"ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo 'Firebase E2E API did not become healthy.' >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          SIGNUP_PAYLOAD="$(jq -nc --arg email "$EMAIL" --arg password "$PASSWORD" '{email:$email,password:$password,returnSecureToken:true}')"
+          SIGNUP_RESPONSE="$(curl --silent --show-error --fail \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$SIGNUP_PAYLOAD" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_WEB_API_KEY}")"
+          ID_TOKEN="$(jq -er '.idToken' <<<"$SIGNUP_RESPONSE")"
+
+          ME_STATUS="$(curl --silent --show-error \
+            --output /tmp/mvp-me.json \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${ID_TOKEN}" \
+            "$E2E_API_URL/v1/me")"
+          test "$ME_STATUS" = '403'
+          jq -e '.code == "INVITE_PROFILE_REQUIRED"' /tmp/mvp-me.json >/dev/null
+
+          PROVISION_PAYLOAD="$(jq -nc '{name:"CI Firebase User",city:"Berlin",interests:["Coffee"],availability:["Saturday"],connectionGoals:["New friends"]}')"
+          PROVISION_STATUS="$(curl --silent --show-error \
+            --output /tmp/mvp-provision.json \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer ${ID_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "$PROVISION_PAYLOAD" \
+            "$E2E_API_URL/v1/auth/provision")"
+          test "$PROVISION_STATUS" = '400'
+          jq -e '.code == "VERIFIED_EMAIL_REQUIRED"' /tmp/mvp-provision.json >/dev/null
+
+  android-smoke:
+    name: Android managed-auth + core navigation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
+      EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: invite-someone-app.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: invite-someone-app
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: invite-someone-app.firebasestorage.app
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '367720887571'
+      EXPO_PUBLIC_FIREBASE_APP_ID: '1:367720887571:web:fa9518d2e19ac3fae816e6'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Enable KVM acceleration
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Firebase Android project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: '1'
+
+      - name: Build managed-auth APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Install Maestro
+        run: curl -Ls "https://get.maestro.mobile.dev" | bash
+
+      - name: Run Android MVP smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash scripts/mvp-android-smoke.sh
+
+      - name: Upload Maestro evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvp-android-smoke-${{ github.run_id }}
+          path: ~/.maestro/tests
+          if-no-files-found: ignore
+          retention-days: 14
