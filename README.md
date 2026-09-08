@@ -170,6 +170,7 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 - [MVP feature catalogue](./docs/FEATURES.md)
 - [MVP delivery and evidence standard](./docs/MVP_DELIVERY.md)
+- [Deterministic E2E fixtures](./docs/E2E_FIXTURES.md)
 - [Current migration/release status](./docs/CURRENT_STATUS.md)
 - [User manual](./docs/USER_MANUAL.md)
 - [Deployment architecture and environment inventory](./docs/DEPLOYMENT_ARCHITECTURE.md)

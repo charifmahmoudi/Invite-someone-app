@@ -6,6 +6,7 @@ import { createApp } from './app';
 import { requireAuthentication } from './auth';
 import { config } from './config';
 import { closeDatabase, ensureDatabaseIndexes } from './database';
+import { e2eRouter } from './e2e-router';
 import { identityRouter } from './identity-router';
 import { resourceRouter } from './resource-router';
 
@@ -23,6 +24,9 @@ const start = async () => {
   app.use(helmet());
   app.use(cors({ origin: config.corsOrigins }));
   app.use(express.json({ limit: '256kb' }));
+
+  // This route is invisible unless explicit isolated-database and token guards pass.
+  app.use('/v1/e2e', e2eRouter);
 
   // Managed identity provisioning lives beside, not inside, the compatibility password API.
   // /login and /register simply fall through when they do not match this router.

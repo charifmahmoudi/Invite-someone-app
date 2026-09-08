@@ -17,6 +17,8 @@ const environmentSchema = z.object({
   AUTH_MODE: z.enum(['internal', 'firebase']).default('internal'),
   JWT_SECRET: z.string().min(32).default(DEVELOPMENT_JWT_SECRET),
   FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
+  E2E_FIXTURES_ENABLED: z.enum(['true', 'false']).default('false'),
+  E2E_FIXTURES_TOKEN: z.string().min(32).optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   CORS_ORIGINS: z.string().default('*'),
 });
@@ -32,6 +34,15 @@ if (
 if (parsed.AUTH_MODE === 'firebase' && !parsed.FIREBASE_PROJECT_ID) {
   throw new Error('FIREBASE_PROJECT_ID is required when AUTH_MODE=firebase.');
 }
+const e2eFixturesEnabled = parsed.E2E_FIXTURES_ENABLED === 'true';
+if (e2eFixturesEnabled && !/(^|[_-])(e2e|test)([_-]|$)/i.test(parsed.MONGODB_DB_NAME)) {
+  throw new Error(
+    'E2E fixtures require a database name containing a distinct e2e or test segment.',
+  );
+}
+if (e2eFixturesEnabled && !parsed.E2E_FIXTURES_TOKEN) {
+  throw new Error('E2E_FIXTURES_TOKEN is required when E2E fixtures are enabled.');
+}
 
 export const config = {
   nodeEnv: parsed.NODE_ENV,
@@ -43,6 +54,8 @@ export const config = {
   authMode: parsed.AUTH_MODE,
   jwtSecret: parsed.JWT_SECRET,
   firebaseProjectId: parsed.FIREBASE_PROJECT_ID,
+  e2eFixturesEnabled,
+  e2eFixturesToken: parsed.E2E_FIXTURES_TOKEN,
   port: parsed.PORT,
   corsOrigins:
     parsed.CORS_ORIGINS === '*'

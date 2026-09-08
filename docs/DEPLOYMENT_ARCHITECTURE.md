@@ -45,11 +45,11 @@ Firebase supplies identity and sessions only. The Express API remains the author
 
 ## Environment inventory
 
-| Environment | Branch/source | Render service | Public API | Auth mode | MongoDB database | Auto deploy | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Firebase staging/E2E | `impl/firebase-auth` | `invite-someone-api-firebase-e2e` | `https://invite-someone-api-firebase-e2e.onrender.com` | `firebase` | `invite_firebase_e2e` | off | active test environment |
-| Production | `main` | `invite-someone-api` | `https://invite-someone-api.onrender.com` | compatibility/internal until explicit cutover | `invite_someone` | off | live; unchanged during staging work |
-| Historical dev | `main` | `invite-someone-api-clerk-dev` | `https://invite-someone-api-clerk-dev.onrender.com` | historical development use | non-production | off | not part of the target Firebase release path |
+| Environment          | Branch/source        | Render service                    | Public API                                             | Auth mode                                     | MongoDB database      | Auto deploy | Status                                       |
+| -------------------- | -------------------- | --------------------------------- | ------------------------------------------------------ | --------------------------------------------- | --------------------- | ----------- | -------------------------------------------- |
+| Firebase staging/E2E | `impl/firebase-auth` | `invite-someone-api-firebase-e2e` | `https://invite-someone-api-firebase-e2e.onrender.com` | `firebase`                                    | `invite_firebase_e2e` | off         | active test environment                      |
+| Production           | `main`               | `invite-someone-api`              | `https://invite-someone-api.onrender.com`              | compatibility/internal until explicit cutover | `invite_someone`      | off         | live; unchanged during staging work          |
+| Historical dev       | `main`               | `invite-someone-api-clerk-dev`    | `https://invite-someone-api-clerk-dev.onrender.com`    | historical development use                    | non-production        | off         | not part of the target Firebase release path |
 
 All three Render services currently run in Virginia on Render's free web-service plan, use Node runtime, build with `npm ci`, and start with `npm run server:start`.
 
@@ -81,6 +81,8 @@ AUTH_MODE=firebase
 FIREBASE_PROJECT_ID=invite-someone-app
 MONGODB_DB_NAME=invite_firebase_e2e
 MONGODB_ENSURE_INDEXES_ON_START=false during normal operation
+E2E_FIXTURES_ENABLED=true only while running the isolated acceptance suite
+E2E_FIXTURES_TOKEN=server-only protected random value
 ```
 
 The MongoDB URI and database credentials stay in Render/Atlas. They must never be copied into Expo public variables, GitHub logs, documentation, or mobile binaries.
@@ -180,11 +182,11 @@ Never commit the upload keystore or any password/private key.
 
 These identities must not be conflated:
 
-| Channel | Certificate role | Current SHA-1 | Firebase/Google OAuth use |
-| --- | --- | --- | --- |
-| GitHub staging/test APK | direct APK installation / emulator validation | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` | register when testing that APK |
-| Play upload key | authenticates AAB uploads to Play | `96:55:A1:7E:35:C7:CF:DE:67:BD:3C:E9:6C:F5:22:73:99:F8:06:A3` | not the installed Play identity |
-| Play App Signing | signs APKs delivered to testers/users | `44:A2:72:01:D0:13:DE:A3:79:D1:41:92:67:6C:52:89:20:10:E6:56` | required for Play-delivered Google Sign-In |
+| Channel                 | Certificate role                              | Current SHA-1                                                 | Firebase/Google OAuth use                  |
+| ----------------------- | --------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
+| GitHub staging/test APK | direct APK installation / emulator validation | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` | register when testing that APK             |
+| Play upload key         | authenticates AAB uploads to Play             | `96:55:A1:7E:35:C7:CF:DE:67:BD:3C:E9:6C:F5:22:73:99:F8:06:A3` | not the installed Play identity            |
+| Play App Signing        | signs APKs delivered to testers/users         | `44:A2:72:01:D0:13:DE:A3:79:D1:41:92:67:6C:52:89:20:10:E6:56` | required for Play-delivered Google Sign-In |
 
 Play App Signing SHA-256 currently recorded for operational verification:
 
@@ -247,6 +249,9 @@ Keep these only in their appropriate secret stores:
 - Firebase service-account private keys if a future feature ever requires them;
 - live Firebase ID tokens;
 - any production-only administrative credential.
+- E2E fixture reset tokens.
+
+The E2E fixture boundary additionally requires a MongoDB database name with a distinct `e2e` or `test` segment. Production must keep `E2E_FIXTURES_ENABLED=false` and must not define an E2E fixture token. See [Deterministic E2E fixtures](./E2E_FIXTURES.md).
 
 ## Promotion and production cutover
 
