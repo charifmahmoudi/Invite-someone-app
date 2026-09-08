@@ -1,22 +1,25 @@
 # Testing strategy
 
-This document defines **what each test layer must prove**. For current progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For exact operator steps, test-user creation and release acceptance, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
+_Last verified: 2026-09-08._
+
+This document defines **what each test layer must prove**. For current progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For exact operator steps, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md). For environment and deployment boundaries, use [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
 
 ## Test layers
 
 ```text
-Device/provider acceptance     few, release-focused
-Hosted API + Firebase smoke
-MongoDB/API integration
-Domain/unit/component tests
-TypeScript/lint/build gates     many, fast
+Play-delivered physical acceptance      final release gate
+Native/emulator preflight               fast Android behavior
+Hosted Firebase/API boundary smoke      real provider trust boundary
+MongoDB/API integration                 authorization + identity invariants
+Domain/unit/component tests             business rules
+TypeScript/lint/build gates              fast static/packaging checks
 ```
 
-No single layer proves native behavior, provider configuration, authorization and MongoDB correctness at once.
+No single layer proves native behavior, provider configuration, Play signing, authorization and MongoDB correctness at once.
 
-## CI gates
+## Standard CI gates
 
-The standard `CI` workflow runs on `main`, `impl/**`, pull requests and manual dispatch:
+The `CI` workflow runs on `main`, `impl/**`, pull requests and manual dispatch:
 
 ```bash
 npm ci
@@ -26,14 +29,50 @@ npm run test:ci
 npm run export:web -- --output-dir dist
 ```
 
-It proves TypeScript correctness, ESLint/React Compiler rules, domain/user-story tests and a production web export.
+It proves TypeScript correctness, lint/React Compiler rules, domain/user-story tests and production web exportability.
 
-Firebase staging adds two provider/native workflows:
+## Firebase staging workflows
 
-- **Firebase Hosted Auth Smoke** creates a disposable real Firebase password user, obtains a genuine Firebase ID token, proves the isolated Express API accepts it, proves an unverified user cannot provision MongoDB state, and deletes the user.
-- **Validate Firebase Android** checks the isolated API, runs Expo Android prebuild, verifies Firebase native configuration, builds the release APK, checks the embedded JS bundle and signing certificate, and uploads the short-lived E2E APK.
+### Firebase Hosted Auth Smoke
 
-The compatibility mobile-preview workflow on `main` remains independent from Firebase staging.
+Creates a disposable real Firebase password user, obtains a genuine Firebase ID token, proves the isolated Express API accepts it, proves an unverified user cannot provision MongoDB state, and removes the test user.
+
+This validates the real Firebase -> Express trust boundary without an Invite auth bypass.
+
+### Validate Firebase Android
+
+This is both a native validation workflow and the current Internal testing release workflow. It:
+
+- checks the isolated staging API;
+- runs Expo Android prebuild;
+- verifies generated Firebase configuration;
+- builds the Firebase staging APK;
+- verifies its embedded JS bundle and staging signing certificate;
+- builds a protected upload-key-signed AAB when signing secrets are present;
+- rejects debug-signed AABs;
+- authenticates to Google Cloud through Workload Identity Federation;
+- uploads/releases the AAB to Google Play Internal testing;
+- validates and commits the Play edit.
+
+Current Internal testing version: `versionCode 5`.
+
+### Play Store Screenshots
+
+This workflow exists to produce truthful Play listing evidence from the real staging app. It:
+
+- downloads a verified staging APK;
+- enables KVM on the GitHub Linux runner;
+- boots an API 35 Pixel 6 emulator;
+- installs and launches Invite;
+- handles non-Invite Android system ANR dialogs without ignoring Invite ANRs;
+- captures real welcome/discovery screenshots;
+- uploads the screenshots as CI evidence;
+- publishes them to Google Play;
+- verifies the Play listing contains at least two phone screenshots.
+
+Latest verified successful run: `34176724947`.
+
+The screenshot workflow proves renderability and listing assets. It does **not** prove the Play App Signing build can install or authenticate on a physical tester device because the emulator installs the staging APK directly.
 
 ## Domain and component coverage
 
@@ -59,40 +98,87 @@ The MongoDB-backed API suite should cover:
 - public profiles do not expose email/auth fields;
 - geospatial queries honor their distance bounds.
 
-Do not introduce an auth bypass just to make E2E easier. Hosted release smokes must prove real Firebase-issued tokens.
+Do not introduce an auth bypass just to make E2E easier.
 
-## Android acceptance strategy
+## Android emulator strategy
 
-Use a **Google-Play-enabled Android emulator first**. It is the primary environment for the full Firebase acceptance suite:
+Use emulator tests for fast preflight and repeatable UI/native checks.
 
-- email/password registration and sign-in;
-- verification-state refresh;
-- onboarding/profile provisioning;
-- password reset;
-- Firebase session restoration after process restart;
-- sign-out;
-- Google Sign-In;
-- Firebase ID token -> Express -> MongoDB behavior;
-- stable Firebase UID -> Invite user mapping.
+Google Sign-In preflight requires an emulator image with Google Play services. A direct staging APK can validate the repository/test signing OAuth registration, but it cannot prove Play App Signing OAuth registration.
 
-The emulator image must include Google Play services for Google Sign-In.
+The CI screenshot emulator currently uses:
 
-After the emulator suite passes, run a **short physical-phone smoke** only for behavior the emulator cannot fully prove: real email/browser handoff, Google account chooser, real-device background/session behavior, installation and network recovery.
+```text
+API level: 35
+architecture: x86_64
+profile: Pixel 6
+hardware acceleration: /dev/kvm
+```
 
-The exact sequence is documented in [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
+Emulator acceptance is useful for:
+
+- app startup/rendering;
+- email/password UI;
+- verification state handling;
+- onboarding/profile UI;
+- session restore logic;
+- logout;
+- staging API/MongoDB behavior;
+- direct-APK Google Sign-In preflight.
+
+It is no longer the final release gate once a Play Internal testing release exists.
+
+## Play-delivered physical-device acceptance
+
+The final Android release gate must run from the **Google Play Internal testing install**, because only that proves:
+
+- Play track/tester delivery;
+- Play App Signing install identity;
+- Play-signed Google OAuth registration;
+- real Android account chooser behavior;
+- real device background/sleep/network behavior;
+- install/reinstall/update behavior under Play.
+
+Required suite:
+
+1. install from Google Play;
+2. launch;
+3. email/password signup;
+4. email verification;
+5. onboarding/profile provisioning;
+6. returning email/password sign-in;
+7. password reset;
+8. Google Sign-In;
+9. Firebase ID token -> Express -> MongoDB;
+10. session persistence after restart;
+11. logout;
+12. repeat login preserves the same Invite member;
+13. no duplicate MongoDB member/identity mapping;
+14. existing-email collision returns `ACCOUNT_LINK_REQUIRED`;
+15. background/sleep resume;
+16. network-change recovery;
+17. uninstall/reinstall or intentional Play update behavior.
+
+Current status: tester eligibility and the Install button are visible, but the physical install currently ends with Play's generic **"Something went wrong on our end"** message. Therefore acceptance has not started on a Play-delivered binary yet.
 
 ## Google provider testing
 
-Google provider UI is a release/configuration smoke, not a routine CI login path. Consent screens and device/provider challenges make unattended UI automation brittle.
+Google provider UI is a release/configuration smoke, not a routine unattended CI login path.
 
-A successful native build is not enough. Google Sign-In also requires an Android OAuth client matching:
+A successful native build is not enough. Google Sign-In requires an Android OAuth client matching:
 
 ```text
 package: com.charifmahmoudi.invite
 signing SHA-1: certificate used by that installed build
 ```
 
-Repository APK signing, Internal App Sharing signing and Play App Signing can use different certificates. See [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
+The current relevant identities are:
+
+- repository/test APK SHA-1 for direct APK preflight;
+- Play upload key SHA-1 for upload authentication only;
+- Play App Signing SHA-1 for builds installed from Google Play.
+
+See [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
 
 ## Stable managed-auth selectors
 
@@ -114,7 +200,7 @@ profile-city
 profile-submit
 ```
 
-The compatibility path intentionally reuses the core auth selectors so existing Maestro coverage remains useful during migration.
+The compatibility path intentionally reuses core auth selectors so historical Maestro coverage remains useful during migration.
 
 ## High-value journeys
 
@@ -139,7 +225,7 @@ HOST sign-in -> create activity -> invite GUEST
 
 ## MongoDB schema gate
 
-The isolated `invite_firebase_e2e` database uses the server's canonical index definitions. Bootstrap can temporarily use:
+The isolated `invite_firebase_e2e` database uses canonical server index definitions. Bootstrap can temporarily use:
 
 ```text
 MONGODB_ENSURE_INDEXES_ON_START=true
@@ -149,16 +235,27 @@ Return it to `false` after indexes exist. Normal scale-to-zero startup must not 
 
 ## Cold-start behavior
 
-Free/scale-to-zero hosting can make the first request slow. Reads and E2E waits may tolerate a bounded cold-start delay.
+Scale-to-zero hosting can make the first request slow. Reads and E2E waits may tolerate a bounded cold-start delay.
 
 Do not blindly retry writes such as activity creation or invitation acceptance until those operations have explicit idempotency guarantees.
 
-## Secrets and evidence
+## Build/signing evidence
 
-Safe/public client configuration includes Firebase Web config, OAuth client IDs and E2E API URLs. Never log or commit MongoDB URIs, passwords, OAuth client secrets, Firebase service-account private keys, signing private keys or Firebase ID tokens.
+Release evidence should record:
 
-Device/release jobs should retain the build artifact, commit identifier, target environment and useful screenshots/logs without secrets.
+- exact Git commit;
+- workflow run ID;
+- target API environment;
+- Android package/versionCode;
+- artifact checksum when relevant;
+- signing certificate fingerprint appropriate to the channel;
+- Play track/release result;
+- screenshots/logs that do not contain secrets.
+
+Do not store passwords, MongoDB URIs, service-account keys, signing private keys, OAuth secrets or live Firebase ID tokens in evidence artifacts.
 
 ## Release gate
 
-The Firebase migration is not ready for `main` solely because CI or the APK build passes. Require the emulator suite, collision-safety check, short physical-phone smoke and Play-distribution signing test described in the runbooks before promotion.
+The Firebase migration is not ready for `main` solely because CI, APK, AAB, store listing or Play track publication passes.
+
+Require the full Play-delivered physical acceptance suite, MongoDB identity verification, collision-safety check, exact-revision recheck, and a safe production client/server cutover plan before promotion.
