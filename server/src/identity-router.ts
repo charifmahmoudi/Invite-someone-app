@@ -125,7 +125,8 @@ identityRouter.post('/provision', requireIdentity, async (request, response) => 
     joinedAt: now,
     completedActivities: 0,
     reliabilityScore: 100,
-    isVerified: false,
+    // In the current MVP this means the primary Firebase email is verified.
+    isVerified: true,
   };
   const mapPoint = mapPointForProfile(profile);
 
