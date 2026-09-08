@@ -2,7 +2,7 @@
 
 _Last verified: 2026-09-08._
 
-This page is the single source of truth for **what has been completed, what has been proven, and what is still pending** in the Firebase/Android migration. Procedures live in the linked runbooks; deployment topology lives in [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
+This page is the single source of truth for **what has been completed, what has been proven, what has been explicitly waived, and what is still pending** in the Firebase/Android migration. Procedures live in the linked runbooks; deployment topology lives in [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
 
 ## Production safety
 
@@ -10,17 +10,15 @@ This page is the single source of truth for **what has been completed, what has 
 - Firebase migration work remains isolated on `impl/firebase-auth`.
 - The production Render API `https://invite-someone-api.onrender.com` and production MongoDB database `invite_someone` have not been switched to Firebase-only auth.
 - Render auto-deploy is off for both staging and production, so a branch update does not silently redeploy either API.
-- Promotion remains a direct fast-forward to `main` only after the Play-delivered acceptance gates pass.
+- Promotion remains a direct fast-forward to `main`; production changes must still be explicit.
 
 ## Current revisions
 
-Before this documentation refresh:
-
 ```text
-Last functionally validated staging SHA:
+Last functionally validated staging SHA before documentation-only changes:
 113efe015bfee8e531a0e477bdef33974b5d30ff
 
-Production main HEAD:
+Production main HEAD before this documentation refresh:
 b5f2c59c4b24939fb8f8459ffcc008bd048dc7d6
 
 Firebase staging Render live deploy:
@@ -30,7 +28,7 @@ Production Render live deploy:
 d050cca0dae894159ec3e54f8476f82655f9b1a2
 ```
 
-Documentation-only commits after the validated staging SHA do not change the accepted application/runtime evidence. Always verify the exact branch and Render deploy revisions before production promotion.
+Documentation-only commits after the validated staging SHA do not change the accepted application/runtime evidence. Always verify exact branch and Render deploy revisions before production promotion.
 
 ## Completed
 
@@ -94,7 +92,7 @@ projects/367720887571/locations/global/workloadIdentityPools/github-actions/prov
 - Tester list **Invite Someone Alpha Testers** contains the configured tester accounts and is selected for Internal testing.
 - The tester opt-in page recognizes the active tester account and offers **Download test app**.
 - Google Play displays the test build and an **Install** button.
-- **Play-delivered installation on the physical test phone now succeeds and the application runs on that device.**
+- **Play-delivered installation on the physical test phone succeeds and the application runs on that device.**
 
 ### Play store listing
 
@@ -107,8 +105,6 @@ The API-visible store listing has been completed and verified:
 - 512x512 Play Store icon present;
 - 1024x500 feature graphic present;
 - two phone screenshots present.
-
-The screenshot workflow captures real app screens from the verified staging APK on a hardware-accelerated Android emulator, uploads them to Google Play, and verifies Play reports at least two phone screenshots.
 
 Successful screenshot publication evidence:
 
@@ -123,8 +119,6 @@ Play verification: 2 phone screenshots
 
 ### Signing identities
 
-Current recorded Android certificate identities:
-
 ```text
 GitHub/test APK SHA-1:
 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25
@@ -138,48 +132,40 @@ Play App Signing SHA-1:
 
 These are public certificate fingerprints, not private key material.
 
-## Current release gate
+## Explicit acceptance-suite waiver
 
-The previous Play delivery blockers are resolved:
+On 2026-09-08 the release owner explicitly chose to **skip the full Play-installed functional acceptance suite** for this release candidate.
 
-- the earlier **"App not available"** tester-propagation problem is resolved;
-- tester eligibility is working;
-- the Internal testing release is visible;
-- store listing/API-managed assets are complete;
-- the physical test phone can now install the Google Play-delivered build;
-- the application launches/runs on that test phone.
+This is a **waiver, not a pass**. The following Play-installed behaviors therefore remain unverified on the physical tester device and must not be described as tested or passing:
 
-The remaining gate is **functional acceptance of the Play-installed build**. Installation success alone is not sufficient to promote the Firebase migration to production.
+- email/password signup;
+- email verification;
+- returning email/password sign-in;
+- password reset;
+- Google Sign-In;
+- onboarding/profile provisioning;
+- Firebase ID token -> Express -> MongoDB end-to-end behavior;
+- session persistence after restart;
+- logout behavior;
+- repeated login preserving the same Invite identity;
+- absence of duplicate MongoDB members under the Play-installed flow;
+- existing-email collision returning `ACCOUNT_LINK_REQUIRED` under the Play-installed flow;
+- background/sleep resume;
+- network-change recovery;
+- uninstall/reinstall or Play-update behavior.
 
-## Still pending
+Existing automated, emulator, API, Firebase-token-boundary and MongoDB tests remain valid evidence for the behaviors they actually exercised, but they do not replace the skipped physical-device functional acceptance suite.
 
-These are the remaining release gates:
+## Still pending before production changes
 
-1. From the Play-installed `versionCode 5` build, run the complete acceptance suite:
-   - launch;
-   - email/password signup;
-   - email verification;
-   - returning email/password sign-in;
-   - password reset;
-   - Google Sign-In;
-   - onboarding/profile provisioning;
-   - Firebase ID token -> Express -> MongoDB;
-   - session persistence after restart;
-   - logout;
-   - repeated login preserves the same Invite identity;
-   - no duplicate MongoDB member;
-   - existing-email collision remains `ACCOUNT_LINK_REQUIRED`;
-   - background/sleep resume;
-   - network-change behavior;
-   - uninstall/reinstall or Play update behavior as appropriate.
-2. Verify the resulting `members` and `user_identities` records in `invite_firebase_e2e` for the Play-installed acceptance identities.
-3. Recheck Play Console App content/policy declarations before any closed-test/production submission. Internal testing can operate before full public-production setup, so these are a separate production-readiness gate.
-4. If this Personal developer account is subject to Google's current new-account rule, complete a closed test with at least 12 testers continuously opted in for 14 days before applying for production access.
-5. Recheck exact staging and `main` branch heads after acceptance.
-6. Fast-forward only the exact accepted staging code to `main`.
-7. Confirm the intended production Render deployment and `/health` response.
-8. Distribute a compatible production client before switching the production API away from compatibility/internal auth.
-9. Perform the production auth cutover only as an explicit, reversible operation.
+1. Recheck Play Console App content/policy declarations before any closed-test/production submission.
+2. If this Personal developer account is subject to Google's current new-account rule, complete the required closed test and production-access process.
+3. Recheck exact `impl/firebase-auth` and `main` branch heads immediately before promotion.
+4. Recheck the exact live staging and production Render revisions because auto-deploy is disabled.
+5. Fast-forward only the intended staging code to `main` when production promotion is explicitly authorized.
+6. Build/distribute a compatible production client before switching the production API away from compatibility/internal auth.
+7. Verify the intended production Render deploy and `/health` response.
+8. Perform the production auth cutover only as an explicit, reversible operation.
 
 ## Release path
 
@@ -187,11 +173,10 @@ These are the remaining release gates:
 CI + hosted auth smoke
         -> Play Internal testing publication
         -> Play installation + launch on physical test phone [passed]
-        -> Play-installed functional acceptance suite
-        -> MongoDB identity/invariant verification
+        -> full Play-installed functional suite [WAIVED; NOT PASSED]
         -> Play production-readiness / closed-test requirements as applicable
-        -> recheck exact branch heads
-        -> fast-forward validated code to main
+        -> recheck exact branch + Render revisions
+        -> explicit fast-forward to main
         -> deploy compatible production client/server pair
         -> explicit production API auth cutover
 ```
@@ -202,7 +187,7 @@ The production API must not be switched to Firebase-only authentication while un
 
 - [Deployment architecture](./DEPLOYMENT_ARCHITECTURE.md): environments, Render services, CI/CD, Play distribution, secrets, promotion and rollback.
 - [Firebase Auth setup](./FIREBASE_AUTH_SETUP.md): identity architecture, provider configuration and trust boundaries.
-- [Firebase operations runbook](./FIREBASE_OPERATIONS_RUNBOOK.md): exact staging/device/user-management/E2E procedure.
+- [Firebase operations runbook](./FIREBASE_OPERATIONS_RUNBOOK.md): staging/device/user-management/E2E procedure.
 - [Google Play testing guide](./GOOGLE_PLAY_TESTING.md): Play track, signing, listing and tester workflow.
 - [Testing strategy](./TESTING.md): CI/E2E layers and acceptance architecture.
 - [Architecture](./ARCHITECTURE.md): broader application architecture.
