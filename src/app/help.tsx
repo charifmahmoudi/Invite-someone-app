@@ -1,5 +1,5 @@
-import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,8 @@ export default function HelpScreen() {
         <View style={styles.intro}>
           <Text style={styles.title}>Use Invite with confidence.</Text>
           <Text style={styles.subtitle}>
-            Account recovery, plan basics, safety guidance, and a direct path to support.
+            Account recovery, plan basics, safety guidance, privacy controls, and a direct path to
+            support.
           </Text>
         </View>
 
@@ -77,19 +78,35 @@ export default function HelpScreen() {
           </View>
         </View>
 
+        <View style={styles.controls}>
+          <Text style={styles.controlsTitle}>Privacy and safety controls</Text>
+          <Text style={styles.controlsBody}>
+            You can report a profile or plan from its detail screen. Blocking is private, prevents
+            new invitations between the two accounts, and removes blocked people from discovery.
+          </Text>
+          <Button
+            icon="people"
+            label="Manage blocked people"
+            onPress={() => router.push('/blocked')}
+            testID="manage-blocked-people"
+            variant="outline"
+          />
+        </View>
+
         <View style={styles.support}>
           <Text style={styles.supportTitle}>Still need help?</Text>
           <Text style={styles.supportBody}>
             Contact Invite support with the approximate time, what you were trying to do, and the
-            exact error message. Never send passwords, recovery links, or authentication tokens.
+            exact error message. For a safety incident, include the report reference if one was
+            shown. Never send passwords, recovery links, or authentication tokens.
           </Text>
           <Button icon="mail" label="Contact support" onPress={contactSupport} />
           <Text style={styles.email}>{SUPPORT_EMAIL}</Text>
         </View>
 
         <Text style={styles.limitations}>
-          Blocking, reporting, and self-service account deletion are required for the public MVP and
-          remain part of the active hardening work until release notes state that they are available.
+          In-app reporting creates an auditable moderation record for review. It is not an emergency
+          service. If there is immediate danger, contact the appropriate local emergency service.
         </Text>
       </View>
     </ScrollScreen>
@@ -133,6 +150,16 @@ const styles = StyleSheet.create({
   safetyCopy: { flex: 1, gap: spacing.xs },
   safetyTitle: { ...typography.h3, color: palette.forest },
   safetyBody: { ...typography.small, color: palette.forest },
+  controls: {
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    padding: spacing.lg,
+  },
+  controlsTitle: { ...typography.h2, color: palette.ink },
+  controlsBody: { ...typography.body, color: palette.inkMuted },
   support: { gap: spacing.md },
   supportTitle: { ...typography.h2, color: palette.ink },
   supportBody: { ...typography.body, color: palette.inkMuted },
