@@ -76,23 +76,55 @@ handle_system_anr() {
   return 0
 }
 
+ensure_clean_capture() {
+  for attempt in 1 2 3 4 5 6 7 8; do
+    dump_ui
+
+    set +e
+    handle_system_anr
+    local anr_result=$?
+    set -e
+
+    if [[ "$anr_result" -eq 2 ]]; then
+      return 1
+    fi
+    if [[ "$anr_result" -eq 0 ]]; then
+      continue
+    fi
+
+    if [[ -f /tmp/window.xml ]] && grep -Eq "isn't responding|android:id/aerr_(wait|close)|Application Error" /tmp/window.xml; then
+      sleep 1
+      continue
+    fi
+    return 0
+  done
+
+  echo '::error title=Unsafe Play screenshot::An Android error/ANR dialog remained visible before screenshot capture.'
+  [[ -f /tmp/window.xml ]] && cat /tmp/window.xml || true
+  return 1
+}
+
 wait_for_text() {
   local needle="$1"
   local tries="${2:-60}"
   for ((i=1; i<=tries; i++)); do
     dump_ui
-    if [[ -f /tmp/window.xml ]] && grep -Fq "$needle" /tmp/window.xml; then
-      return 0
-    fi
 
+    # System dialogs can leave target app text visible underneath them. Clear the
+    # dialog before accepting the target text so screenshots cannot capture it.
     set +e
     handle_system_anr
     local anr_result=$?
     set -e
     if [[ "$anr_result" -eq 2 ]]; then
       return 1
+    elif [[ "$anr_result" -eq 0 ]]; then
+      continue
     fi
 
+    if [[ -f /tmp/window.xml ]] && grep -Fq "$needle" /tmp/window.xml; then
+      return 0
+    fi
     sleep 1
   done
   echo "::error title=Android UI timeout::Could not find text: $needle"
@@ -135,11 +167,13 @@ tap_visible_text() {
 
 wait_for_text 'Making friends can start with one simple invite.' 60
 sleep 2
+ensure_clean_capture
 adb exec-out screencap -p > "$OUT/01-welcome.png"
 
 tap_visible_text 'Explore the demo'
 wait_for_text 'What sounds good?' 60
 sleep 3
+ensure_clean_capture
 adb exec-out screencap -p > "$OUT/02-discover.png"
 
 python3 - "$OUT/01-welcome.png" "$OUT/02-discover.png" <<'PY'
