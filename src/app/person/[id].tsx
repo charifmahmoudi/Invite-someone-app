@@ -11,6 +11,7 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScrollScreen } from '@/components/ui/screen';
 import { palette, radius, shadow, spacing, typography } from '@/constants/theme';
 import { useApp, useCurrentProfile } from '@/state/app-context';
+import { reliabilityLabel } from '@/utils/format';
 
 export default function PersonDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -60,7 +61,7 @@ export default function PersonDetailsScreen() {
             void sendInvitations({
               activityId,
               receiverIds: [profile.id],
-              message: `This made me think of you — would you like to join?`,
+              message: 'This made me think of you — would you like to join?',
             })
               .then(() =>
                 Alert.alert(
@@ -93,6 +94,12 @@ export default function PersonDetailsScreen() {
           <Text style={styles.handle}>
             @{profile.handle} · {profile.approximateLocation?.area ?? profile.city}
           </Text>
+          {profile.isVerified ? (
+            <View style={styles.verifiedEmail}>
+              <AppIcon name="check" color={palette.forest} size={14} />
+              <Text style={styles.verifiedEmailText}>Verified email</Text>
+            </View>
+          ) : null}
           {profile.approximateLocation ? (
             <View style={styles.approximateArea}>
               <AppIcon name="shield" color={palette.forest} size={15} />
@@ -102,7 +109,10 @@ export default function PersonDetailsScreen() {
           <Text style={styles.headline}>{profile.headline}</Text>
           <Text style={styles.bio}>{profile.bio}</Text>
           <View style={styles.stats}>
-            <Pill label={`${profile.reliabilityScore}% reliable`} tone="success" />
+            <Pill
+              label={reliabilityLabel(profile.completedActivities, profile.reliabilityScore)}
+              tone="success"
+            />
             <Pill label={`${profile.completedActivities} plans joined`} />
           </View>
         </View>
@@ -221,6 +231,8 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   name: { ...typography.h1, color: palette.ink },
   handle: { ...typography.small, color: palette.inkMuted },
+  verifiedEmail: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  verifiedEmailText: { ...typography.micro, color: palette.forest },
   approximateArea: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   approximateAreaText: { ...typography.micro, color: palette.forest },
   headline: { ...typography.h3, color: palette.ink, textAlign: 'center', marginTop: spacing.sm },
@@ -237,7 +249,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: '#FEF3EF',
+    backgroundColor: palette.primarySoft,
     padding: spacing.lg,
   },
   compatibilityCopy: { flex: 1, gap: 2 },
