@@ -82,7 +82,7 @@ activityLifecycleRouter.patch('/:activityId', async (request, response) => {
   const input = activityUpdateSchema.parse(request.body);
   const { activities } = await getCollections();
   const existing = await activities.findOne({ _id: request.params.activityId });
-  if (!existing) fail(404, 'The activity could not be found.');
+  if (existing === null) throw new MvpHttpError(404, 'The activity could not be found.');
   if (existing.hostId !== userId) fail(403, 'Only the host can edit this plan.');
   if (isCancelled(existing)) fail(409, 'A cancelled plan cannot be edited.');
   if (new Date(existing.startAt).getTime() <= Date.now()) {
@@ -112,7 +112,7 @@ activityLifecycleRouter.patch('/:activityId', async (request, response) => {
     },
   );
   const updated = await activities.findOne({ _id: existing._id });
-  if (!updated) fail(404, 'The activity could not be found.');
+  if (updated === null) throw new MvpHttpError(404, 'The activity could not be found.');
   response.json(activityFromDocument(updated));
 });
 
@@ -120,7 +120,7 @@ activityLifecycleRouter.delete('/:activityId/attendees/me', async (request, resp
   const userId = authenticatedUserId(response);
   const { activities } = await getCollections();
   const activity = await activities.findOne({ _id: request.params.activityId });
-  if (!activity) fail(404, 'The activity could not be found.');
+  if (activity === null) throw new MvpHttpError(404, 'The activity could not be found.');
   if (activity.hostId === userId) {
     fail(409, 'Hosts cannot leave their own plan. Edit or cancel the plan instead.');
   }
@@ -131,7 +131,10 @@ activityLifecycleRouter.delete('/:activityId/attendees/me', async (request, resp
   if (new Date(activity.startAt).getTime() <= Date.now()) {
     fail(409, 'This activity has already started.');
   }
-  await activities.updateOne({ _id: activity._id }, { $pull: { attendeeIds: userId } });
+  await activities.updateOne(
+    { _id: activity._id },
+    { $set: { attendeeIds: activity.attendeeIds.filter((attendeeId) => attendeeId !== userId) } },
+  );
   response.status(204).end();
 });
 
@@ -139,7 +142,7 @@ activityLifecycleRouter.delete('/:activityId', async (request, response) => {
   const userId = authenticatedUserId(response);
   const { activities, invitations } = await getCollections();
   const activity = await activities.findOne({ _id: request.params.activityId });
-  if (!activity) fail(404, 'The activity could not be found.');
+  if (activity === null) throw new MvpHttpError(404, 'The activity could not be found.');
   if (activity.hostId !== userId) fail(403, 'Only the host can cancel this plan.');
   if (isCancelled(activity)) {
     response.status(204).end();
@@ -198,8 +201,8 @@ invitationSafetyRouter.post('/', async (request, response, next) => {
     return;
   }
   if (isCancelled(activity)) fail(409, 'Invitations cannot be sent for a cancelled plan.');
-  const receiverIds = [
-    ...new Set(
+  const receiverIds: string[] = [
+    ...new Set<string>(
       inputs
         .map((input: unknown) =>
           typeof (input as { receiverId?: unknown })?.receiverId === 'string'
