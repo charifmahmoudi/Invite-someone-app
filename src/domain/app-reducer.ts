@@ -17,6 +17,11 @@ export type AppAction =
   | { type: 'add-profile'; profile: Profile; session: Session }
   | { type: 'update-profile'; profile: Profile }
   | { type: 'create-activity'; activity: Activity }
+  | { type: 'update-activity'; activity: Activity }
+  | { type: 'cancel-activity'; activityId: string; cancelledAt: string }
+  | { type: 'leave-activity'; activityId: string; userId: string }
+  | { type: 'block-profile'; profileId: string }
+  | { type: 'restore-profile'; profile: Profile }
   | { type: 'send-invitations'; invitations: Invitation[] }
   | {
       type: 'respond-invitation';
@@ -84,6 +89,75 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         activities: [action.activity, ...state.activities],
+        busy: false,
+        error: null,
+      };
+    case 'update-activity':
+      return {
+        ...state,
+        activities: state.activities.map((activity) =>
+          activity.id === action.activity.id ? action.activity : activity,
+        ),
+        busy: false,
+        error: null,
+      };
+    case 'cancel-activity':
+      return {
+        ...state,
+        activities: state.activities.map((activity) =>
+          activity.id === action.activityId
+            ? { ...activity, status: 'cancelled', cancelledAt: action.cancelledAt }
+            : activity,
+        ),
+        invitations: state.invitations.map((invitation) =>
+          invitation.activityId === action.activityId && invitation.status === 'pending'
+            ? { ...invitation, status: 'cancelled', respondedAt: action.cancelledAt }
+            : invitation,
+        ),
+        busy: false,
+        error: null,
+      };
+    case 'leave-activity':
+      return {
+        ...state,
+        activities: state.activities.map((activity) =>
+          activity.id === action.activityId
+            ? {
+                ...activity,
+                attendeeIds: activity.attendeeIds.filter((id) => id !== action.userId),
+              }
+            : activity,
+        ),
+        busy: false,
+        error: null,
+      };
+    case 'block-profile': {
+      const removedActivityIds = new Set(
+        state.activities
+          .filter((activity) => activity.hostId === action.profileId)
+          .map((activity) => activity.id),
+      );
+      return {
+        ...state,
+        profiles: state.profiles.filter((profile) => profile.id !== action.profileId),
+        activities: state.activities.filter((activity) => activity.hostId !== action.profileId),
+        invitations: state.invitations.filter(
+          (invitation) =>
+            invitation.senderId !== action.profileId && invitation.receiverId !== action.profileId,
+        ),
+        savedActivityIds: state.savedActivityIds.filter(
+          (activityId) => !removedActivityIds.has(activityId),
+        ),
+        busy: false,
+        error: null,
+      };
+    }
+    case 'restore-profile':
+      return {
+        ...state,
+        profiles: state.profiles.some((profile) => profile.id === action.profile.id)
+          ? state.profiles
+          : [...state.profiles, action.profile],
         busy: false,
         error: null,
       };
