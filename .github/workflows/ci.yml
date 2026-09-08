@@ -40,5 +40,8 @@ jobs:
       - name: Test user stories
         run: npm run test:ci
 
+      - name: Validate MVP story traceability
+        run: npm run validate:mvp
+
       - name: Verify production web bundle
         run: npm run export:web -- --output-dir dist

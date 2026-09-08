@@ -159,7 +159,7 @@ Required suite:
 16. network-change recovery;
 17. uninstall/reinstall or intentional Play update behavior.
 
-Current status: tester eligibility and the Install button are visible, but the physical install currently ends with Play's generic **"Something went wrong on our end"** message. Therefore acceptance has not started on a Play-delivered binary yet.
+Current status: the Play-delivered build installs and launches on the physical test phone. The release owner explicitly waived the remaining functional acceptance suite for this release candidate, so the behaviors below remain unverified rather than passed. See [CURRENT_STATUS.md](./CURRENT_STATUS.md) for the exact evidence and waived checks.
 
 ## Google provider testing
 

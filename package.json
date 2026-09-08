@@ -80,6 +80,7 @@
     "server:start": "tsx server/src/index.ts",
     "server:indexes": "tsx server/src/indexes.ts",
     "server:seed": "tsx server/src/seed.ts",
+    "validate:mvp": "node scripts/validate-mvp-evidence.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
