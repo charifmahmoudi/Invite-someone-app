@@ -37,7 +37,7 @@ flowchart LR
   Google --> Firebase
   App -->|Firebase ID token| StagingAPI
   StagingAPI --> StagingDB
-  App -. production client after acceptance .-> ProdAPI
+  App -. production client after explicit promotion .-> ProdAPI
   ProdAPI --> ProdDB
 ```
 
@@ -48,7 +48,7 @@ Firebase supplies identity and sessions only. The Express API remains the author
 | Environment | Branch/source | Render service | Public API | Auth mode | MongoDB database | Auto deploy | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Firebase staging/E2E | `impl/firebase-auth` | `invite-someone-api-firebase-e2e` | `https://invite-someone-api-firebase-e2e.onrender.com` | `firebase` | `invite_firebase_e2e` | off | active test environment |
-| Production | `main` | `invite-someone-api` | `https://invite-someone-api.onrender.com` | compatibility/internal until explicit cutover | `invite_someone` | off | live; do not modify during staging acceptance |
+| Production | `main` | `invite-someone-api` | `https://invite-someone-api.onrender.com` | compatibility/internal until explicit cutover | `invite_someone` | off | live; unchanged during staging work |
 | Historical dev | `main` | `invite-someone-api-clerk-dev` | `https://invite-someone-api-clerk-dev.onrender.com` | historical development use | non-production | off | not part of the target Firebase release path |
 
 All three Render services currently run in Virginia on Render's free web-service plan, use Node runtime, build with `npm ci`, and start with `npm run server:start`.
@@ -59,7 +59,7 @@ The repository also contains a portable `Dockerfile` based on Node 22.13 Alpine.
 
 Deployment state and Git branch state are intentionally separate because Render auto-deploy is disabled.
 
-- **Firebase staging branch last functionally validated SHA:** `113efe015bfee8e531a0e477bdef33974b5d30ff` before this documentation refresh.
+- **Firebase staging branch last functionally validated SHA before documentation-only changes:** `113efe015bfee8e531a0e477bdef33974b5d30ff`.
 - **Firebase staging Render live deploy:** `ea14d8105e2d09da6aebdd9ff4f272636c7d749a` (`docs: clarify Firebase server bootstrap variables`).
 - **Production `main` head before this documentation refresh:** `b5f2c59c4b24939fb8f8459ffcc008bd048dc7d6`.
 - **Production Render live deploy:** `d050cca0dae894159ec3e54f8476f82655f9b1a2`.
@@ -100,7 +100,7 @@ start: npm run server:start
 MONGODB_DB_NAME=invite_someone
 ```
 
-Production must not be switched to Firebase-only authentication until the Play-delivered Firebase client has passed the release acceptance suite and unsupported compatibility clients are accounted for.
+Production must not be switched to Firebase-only authentication while unsupported compatibility clients can still reach the API. A compatible-client rollout, minimum-version gate, or temporary compatibility strategy is required before the final auth cutover.
 
 ## Android / Google Play deployment path
 
@@ -148,7 +148,7 @@ flowchart LR
 9. assigns it to the `internal` track with `completed` status;
 10. validates and commits the Play edit.
 
-The current Internal testing release contains Android `versionCode` **5**. Do not bump it merely to troubleshoot Play listing, tester propagation, or install errors. Increase it only for a genuine subsequent Play track release or when Play reports a version-code collision for a new upload.
+The current Internal testing release contains Android `versionCode` **5**. Do not bump it merely to troubleshoot listing, tester, or installation issues. Increase it only for a genuine subsequent Play track release or when Play reports a version-code collision for a new upload.
 
 ### Google Cloud / Play CI trust
 
@@ -215,11 +215,13 @@ The screenshot workflow currently pins a specific verified APK artifact ID. When
 - Internal testing release is committed and available to the configured tester list.
 - The tester opt-in page recognizes the enrolled tester account and exposes **Download test app**.
 - Google Play shows an Install button for the unreviewed test build.
-- **The current Play-delivered build now installs successfully on the physical test phone and the application runs on that device.**
+- **The current Play-delivered build installs successfully on the physical test phone and the application runs on that device.**
 - Play visibility, eligibility, delivery, installation, and launch are therefore working.
-- The remaining release gate is the complete functional acceptance suite on the Play-installed build; installation success alone does not authorize production promotion.
+- The release owner has explicitly **waived the full Play-installed functional acceptance suite** for this release candidate.
 
-Internal testing can be used before the app is fully configured for public production. Console-only App content/policy declarations and production-access requirements remain separate from the internal-test acceptance gate.
+The waiver must be represented accurately: the suite is **not passed**; it is **not executed**. Existing CI, emulator, hosted Firebase-token, API, and MongoDB evidence remains valid for what those layers tested, but does not constitute proof of the skipped physical-device journeys.
+
+Internal testing can operate before the app is fully configured for public production. Console-only App content/policy declarations and production-access requirements remain separate from internal-test distribution.
 
 ## Secret and configuration boundaries
 
@@ -248,42 +250,24 @@ Keep these only in their appropriate secret stores:
 
 ## Promotion and production cutover
 
-Promotion is intentionally conservative:
+The current release path is:
 
 ```text
 staging CI
   -> hosted Firebase boundary smoke
   -> Play Internal testing publication
   -> Play installation + launch on real device [passed]
-  -> Play-installed functional acceptance suite
-  -> verify MongoDB identity invariants
-  -> re-check exact branch heads
-  -> fast-forward validated staging code to main
-  -> deploy/verify production client path
+  -> full Play-installed functional acceptance suite [WAIVED; NOT PASSED]
+  -> Play production-readiness / closed-test requirements as applicable
+  -> re-check exact branch and Render revisions
+  -> explicit fast-forward of intended staging code to main
+  -> deploy/verify compatible production client path
   -> explicit production Render auth cutover
 ```
 
-Required Play-installed acceptance includes:
+The skipped suite means the following Play-installed behaviors remain unverified on the physical tester device: email/password signup and verification, returning sign-in, password reset, Google Sign-In, onboarding/profile provisioning, Firebase token -> Express -> MongoDB end-to-end behavior, session persistence, logout, duplicate-identity protection in the Play-installed flow, `ACCOUNT_LINK_REQUIRED` in the Play-installed flow, background/sleep behavior, network recovery, and reinstall/update behavior.
 
-- install from Google Play [passed];
-- launch [passed];
-- email/password signup;
-- email verification;
-- returning email/password sign-in;
-- password reset;
-- Google Sign-In;
-- onboarding/profile provisioning;
-- Firebase ID token -> Express -> MongoDB;
-- session persistence after restart;
-- logout;
-- repeated login preserves the same Invite identity;
-- no duplicate MongoDB member;
-- existing-email collision remains `ACCOUNT_LINK_REQUIRED`;
-- background/sleep resume;
-- network-change recovery;
-- uninstall/reinstall or Play update behavior as appropriate.
-
-Only after those remaining checks pass should `main` and production be changed.
+Those items must not be recorded as passed later unless they are actually tested. Production promotion may proceed only as an explicit release-owner decision that accepts this residual risk; it must not be inferred from the waiver alone.
 
 ## Rollback principles
 
