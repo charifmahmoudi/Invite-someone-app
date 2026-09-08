@@ -7,9 +7,26 @@ import { requireAuthentication } from './auth';
 import { config } from './config';
 import { closeDatabase, ensureDatabaseIndexes } from './database';
 import { identityRouter } from './identity-router';
+import {
+  activityLifecycleRouter,
+  blocksRouter,
+  invitationSafetyRouter,
+  mvpRouterErrorHandler,
+  peopleSafetyRouter,
+  reportsRouter,
+  savedActivitySafetyRouter,
+} from './mvp-router';
 import { resourceRouter } from './resource-router';
 
-const resourceReadPaths = new Set(['/me', '/activities', '/people', '/invitations', '/saved']);
+const resourceReadPaths = new Set([
+  '/data',
+  '/me',
+  '/activities',
+  '/people',
+  '/profiles',
+  '/invitations',
+  '/saved',
+]);
 
 const start = async () => {
   if (config.ensureIndexesOnStart) {
@@ -28,7 +45,17 @@ const start = async () => {
   // /login and /register simply fall through when they do not match this router.
   app.use('/v1/auth', identityRouter);
 
-  // New resource-oriented reads live ahead of the compatibility app. Only these
+  // MVP lifecycle and safety mutations are mounted ahead of the compatibility app so
+  // they can enforce current rules while older endpoints remain available during migration.
+  app.use('/v1/activities', requireAuthentication, activityLifecycleRouter);
+  app.use('/v1/invitations', requireAuthentication, invitationSafetyRouter);
+  app.use('/v1/people', requireAuthentication, peopleSafetyRouter);
+  app.use('/v1/blocks', requireAuthentication, blocksRouter);
+  app.use('/v1/reports', requireAuthentication, reportsRouter);
+  app.use('/v1/saved-activities', requireAuthentication, savedActivitySafetyRouter);
+  app.use(mvpRouterErrorHandler);
+
+  // Resource-oriented reads live ahead of the compatibility app. Only these
   // GET routes require auth here; /v1/auth/login and /v1/auth/register must stay
   // public so current binaries can still establish a session.
   app.use(
