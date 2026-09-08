@@ -139,10 +139,7 @@ jobs:
           script: |
             adb reverse tcp:4000 tcp:4000
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            "$HOME/.maestro/bin/maestro" test \
-              -e E2E_EMAIL="$E2E_EMAIL" \
-              -e E2E_PASSWORD="$E2E_PASSWORD" \
-              .maestro/auth
+            "$HOME/.maestro/bin/maestro" test -e E2E_EMAIL="$E2E_EMAIL" -e E2E_PASSWORD="$E2E_PASSWORD" .maestro/auth
 
       - name: Upload Maestro evidence
         if: always()
