@@ -96,8 +96,8 @@ jobs:
 
   android-smoke:
     name: Android managed-auth + core navigation
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
     env:
       EXPO_PUBLIC_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
       EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
@@ -126,12 +126,20 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Enable KVM acceleration
+      - name: Enable KVM acceleration when available
+        shell: bash
         run: |
           set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo '::warning title=KVM unavailable::This runner has no /dev/kvm; emulator-runner will fall back to software acceleration.'
+            exit 0
+          fi
+
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          sudo udevadm trigger --name-match=kvm || true
+          sudo chmod 666 /dev/kvm
+          ls -l /dev/kvm
           test -r /dev/kvm
           test -w /dev/kvm
 
