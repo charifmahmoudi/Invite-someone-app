@@ -82,6 +82,8 @@ These tests do not replace server authorization or hosted Firebase testing.
 
 ## API integration requirements
 
+The `MongoDB API integration` CI job starts MongoDB 8 as a single-node replica set and runs the Express API over HTTP against `invite_ci_test`. The replica set is required to exercise invitation acceptance transactions rather than silently replacing them with mocks. The suite resets deterministic fixtures between cases and currently covers authentication rejection, internal login, private-field filtering, invite-only visibility, invitation authorization and concurrent acceptance, concurrent final-slot joining, and saved-activity scoping.
+
 The MongoDB-backed API suite should cover:
 
 - protected endpoints reject unauthenticated requests;
