@@ -1,0 +1,164 @@
+{
+  "$schema": "./story-evidence.schema.json",
+  "version": 1,
+  "stories": [
+    {
+      "id": "US-01",
+      "feature": "authentication-onboarding",
+      "status": "partial",
+      "implementation": [
+        "src/app/(auth)/sign-up.tsx",
+        "src/domain/validation.ts",
+        "server/src/app.ts"
+      ],
+      "tests": ["src/__tests__/validation.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-01",
+      "manualAnchor": "us-01--create-an-account-and-preferences"
+    },
+    {
+      "id": "US-02",
+      "feature": "member-profiles",
+      "status": "partial",
+      "implementation": [
+        "src/app/profile/edit.tsx",
+        "src/domain/validation.ts",
+        "server/src/app.ts"
+      ],
+      "tests": ["src/__tests__/validation.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-02",
+      "manualAnchor": "us-02--edit-a-profile"
+    },
+    {
+      "id": "US-03",
+      "feature": "people-discovery",
+      "status": "partial",
+      "implementation": [
+        "src/app/(tabs)/people.tsx",
+        "src/domain/profile-discovery.ts",
+        "src/domain/matching.ts"
+      ],
+      "tests": ["src/__tests__/profile-discovery.test.ts", "src/__tests__/matching.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-03",
+      "manualAnchor": "us-03--discover-compatible-people"
+    },
+    {
+      "id": "US-04",
+      "feature": "activity-creation",
+      "status": "partial",
+      "implementation": ["src/app/create.tsx", "src/domain/validation.ts", "server/src/app.ts"],
+      "tests": ["src/__tests__/validation.test.ts", "src/__tests__/app-reducer.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-04",
+      "manualAnchor": "us-04--create-an-activity"
+    },
+    {
+      "id": "US-05",
+      "feature": "invitations",
+      "status": "partial",
+      "implementation": [
+        "src/app/invite/[activityId].tsx",
+        "src/domain/matching.ts",
+        "server/src/app.ts"
+      ],
+      "tests": ["src/__tests__/matching.test.ts", "src/__tests__/app-reducer.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-05",
+      "manualAnchor": "us-05--select-and-invite-recommended-members"
+    },
+    {
+      "id": "US-06",
+      "feature": "invitations",
+      "status": "partial",
+      "implementation": [
+        "src/app/(tabs)/invitations.tsx",
+        "src/app/activity/[id].tsx",
+        "server/src/app.ts"
+      ],
+      "tests": ["src/__tests__/app-reducer.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-06",
+      "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation"
+    },
+    {
+      "id": "US-07",
+      "feature": "participation-trust",
+      "status": "partial",
+      "implementation": ["src/app/activity/[id].tsx", "server/src/app.ts"],
+      "tests": ["src/__tests__/app-reducer.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-07",
+      "manualAnchor": "us-07--join-a-community-activity"
+    },
+    {
+      "id": "US-08",
+      "feature": "saved-plans-safety",
+      "status": "partial",
+      "implementation": [
+        "src/components/activity-card.tsx",
+        "src/state/app-context.tsx",
+        "server/src/app.ts"
+      ],
+      "tests": ["src/__tests__/app-reducer.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-08",
+      "manualAnchor": "us-08--save-an-activity"
+    },
+    {
+      "id": "US-09",
+      "feature": "participation-trust",
+      "status": "partial",
+      "implementation": ["src/app/activity/[id].tsx", "src/app/person/[id].tsx"],
+      "tests": [],
+      "e2e": null,
+      "evidence": "evidence/US-09",
+      "manualAnchor": "us-09--review-hosts-and-attendees"
+    },
+    {
+      "id": "US-10",
+      "feature": "saved-plans-safety",
+      "status": "partial",
+      "implementation": ["src/app/(tabs)/invitations.tsx", "src/app/activity/[id].tsx"],
+      "tests": [],
+      "e2e": null,
+      "evidence": "evidence/US-10",
+      "manualAnchor": "us-10--follow-first-meeting-safety-guidance"
+    },
+    {
+      "id": "US-11",
+      "feature": "people-discovery",
+      "status": "partial",
+      "implementation": ["src/app/(tabs)/people.tsx", "src/domain/profile-discovery.ts"],
+      "tests": ["src/__tests__/profile-discovery.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-11",
+      "manualAnchor": "us-11--combine-discovery-filters"
+    },
+    {
+      "id": "US-12",
+      "feature": "people-discovery",
+      "status": "partial",
+      "implementation": ["src/components/people-map.tsx", "src/domain/profile-discovery.ts"],
+      "tests": ["src/__tests__/profile-discovery.test.ts"],
+      "e2e": null,
+      "evidence": "evidence/US-12",
+      "manualAnchor": "us-12--use-the-approximate-area-map"
+    },
+    {
+      "id": "US-13",
+      "feature": "member-profiles",
+      "status": "partial",
+      "implementation": [
+        "src/components/ui/avatar.tsx",
+        "src/components/profile-card.tsx",
+        "src/app/person/[id].tsx"
+      ],
+      "tests": [],
+      "e2e": null,
+      "evidence": "evidence/US-13",
+      "manualAnchor": "us-13--review-a-persons-profile"
+    }
+  ]
+}
