@@ -22,15 +22,17 @@ export default function WelcomeScreen() {
   const managedAuth = useManagedAuth();
 
   useEffect(() => {
-    if (
-      managedAuth.enabled &&
-      managedAuth.identityLoaded &&
-      managedAuth.identitySignedIn &&
-      !state.session
-    ) {
+    if (!managedAuth.enabled || !managedAuth.identityLoaded) return;
+
+    if (managedAuth.status === 'unverified' || managedAuth.status === 'profile-required') {
       router.replace('/(auth)/sign-up');
+      return;
     }
-  }, [managedAuth.enabled, managedAuth.identityLoaded, managedAuth.identitySignedIn, router, state.session]);
+
+    if (managedAuth.status === 'ready' && state.hydrated && state.session) {
+      router.replace('/(tabs)');
+    }
+  }, [managedAuth.enabled, managedAuth.identityLoaded, managedAuth.status, router, state.hydrated, state.session]);
 
   const openDemo = async () => {
     try {
