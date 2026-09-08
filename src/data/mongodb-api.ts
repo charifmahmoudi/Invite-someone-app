@@ -26,6 +26,7 @@ interface StoredApiSession {
 }
 
 interface ApiErrorBody {
+  code?: string;
   message?: string;
 }
 
@@ -63,21 +64,26 @@ export interface IdentityProvisionResult {
 let externalTokenProvider: ApiTokenProvider | undefined;
 
 /**
- * Installs the token source used by the managed identity client (currently Supabase Auth).
+ * Installs the token source used by the managed identity client (Firebase Auth).
  * Passing undefined restores the internal Invite-session compatibility path.
  */
 export const setMongoApiTokenProvider = (provider?: ApiTokenProvider) => {
   externalTokenProvider = provider;
 };
 
-class ApiError extends Error {
+export class InviteApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
+    this.name = 'InviteApiError';
   }
 }
+
+export const isInviteApiError = (error: unknown): error is InviteApiError =>
+  error instanceof InviteApiError;
 
 const removeSession = () =>
   Platform.OS === 'web'
@@ -128,13 +134,16 @@ const request = async <T>(
     const body =
       response.status === 204 ? undefined : ((await response.json()) as T | ApiErrorBody);
     if (!response.ok) {
-      const message =
-        (body as ApiErrorBody | undefined)?.message ?? 'The server rejected the request.';
-      throw new ApiError(message, response.status);
+      const apiError = body as ApiErrorBody | undefined;
+      throw new InviteApiError(
+        apiError?.message ?? 'The server rejected the request.',
+        response.status,
+        apiError?.code,
+      );
     }
     return body as T;
   } catch (error) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof InviteApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('The server took too long to respond. Check your connection and try again.');
     }
@@ -158,7 +167,7 @@ export const getMongoSession = async (): Promise<{ userId: string } | null> => {
   try {
     return await request<{ userId: string }>('/v1/session');
   } catch (error) {
-    if (!externalTokenProvider && error instanceof ApiError && error.status === 401) {
+    if (!externalTokenProvider && error instanceof InviteApiError && error.status === 401) {
       await removeSession();
       return null;
     }
