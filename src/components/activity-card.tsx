@@ -30,10 +30,11 @@ export function ActivityCard({
 }: ActivityCardProps) {
   const colors = categoryColors[activity.category];
   const remaining = Math.max(0, activity.capacity - activity.attendeeIds.length);
+  const cancelled = activity.status === 'cancelled';
 
   return (
     <PressableScale
-      accessibilityLabel={`${activity.title}, ${formatActivityDate(activity.startAt)}`}
+      accessibilityLabel={`${activity.title}, ${cancelled ? 'cancelled, ' : ''}${formatActivityDate(activity.startAt)}`}
       onPress={onPress}
       style={[styles.card, compact && styles.cardCompact]}
     >
@@ -44,10 +45,13 @@ export function ActivityCard({
         style={[styles.visual, compact && styles.visualCompact]}
       >
         <View style={styles.topRow}>
-          <Pill label={activity.category} />
-          {onToggleSaved ? (
+          <View style={styles.pills}>
+            <Pill label={activity.category} />
+            {cancelled ? <Pill label="Cancelled" tone="accent" /> : null}
+          </View>
+          {onToggleSaved && !cancelled ? (
             <PressableScale
-              accessibilityLabel={saved ? 'Remove from saved activities' : 'Save activity'}
+              accessibilityLabel={saved ? 'Remove from saved plans' : 'Save plan'}
               haptic
               onPress={onToggleSaved}
               style={styles.saveButton}
@@ -67,7 +71,7 @@ export function ActivityCard({
         </View>
         <Text
           numberOfLines={compact ? 2 : 3}
-          style={[styles.title, compact && styles.titleCompact]}
+          style={[styles.title, compact && styles.titleCompact, cancelled && styles.cancelledTitle]}
         >
           {activity.title}
         </Text>
@@ -76,7 +80,9 @@ export function ActivityCard({
       <View style={styles.body}>
         {!compact ? (
           <Text numberOfLines={2} style={styles.description}>
-            {activity.description}
+            {cancelled
+              ? 'This plan was cancelled by the host. Open it for the original details.'
+              : activity.description}
           </Text>
         ) : null}
         <View style={styles.metaRow}>
@@ -104,7 +110,7 @@ export function ActivityCard({
             </Text>
           </View>
           <Text style={[styles.spots, remaining <= 2 && styles.spotsLimited]}>
-            {remaining === 0 ? 'Full' : `${remaining} spot${remaining === 1 ? '' : 's'}`}
+            {cancelled ? 'Cancelled' : remaining === 0 ? 'Full' : `${remaining} spot${remaining === 1 ? '' : 's'}`}
           </Text>
         </View>
       </View>
@@ -124,7 +130,8 @@ const styles = StyleSheet.create({
   cardCompact: { minWidth: 270, maxWidth: 300 },
   visual: { minHeight: 190, justifyContent: 'space-between', padding: spacing.xl },
   visualCompact: { minHeight: 156 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   saveButton: {
     width: 40,
     height: 40,
@@ -138,6 +145,7 @@ const styles = StyleSheet.create({
   date: { ...typography.label, color: palette.inkMuted, textTransform: 'uppercase' },
   title: { ...typography.h1, color: palette.ink, marginTop: spacing.sm },
   titleCompact: { ...typography.h2 },
+  cancelledTitle: { color: palette.inkMuted },
   body: { padding: spacing.xl, gap: spacing.md },
   description: { ...typography.body, color: palette.inkMuted },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
