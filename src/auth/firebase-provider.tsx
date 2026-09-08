@@ -1,5 +1,5 @@
 import { onIdTokenChanged, signOut, type User } from 'firebase/auth';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { signOutGoogle } from '@/auth/google-sign-in';
@@ -49,7 +49,7 @@ export const useManagedAuth = () => useContext(ManagedAuthContext);
 
 function InviteSessionLogoutMirror() {
   const { state } = useApp();
-  const hadInviteSession = useState({ current: false })[0];
+  const hadInviteSession = useRef(false);
 
   useEffect(() => {
     if (state.session) {
@@ -61,7 +61,7 @@ function InviteSessionLogoutMirror() {
       hadInviteSession.current = false;
       void Promise.allSettled([signOut(firebaseAuth), signOutGoogle()]);
     }
-  }, [hadInviteSession, state.hydrated, state.session]);
+  }, [state.hydrated, state.session]);
 
   return null;
 }
