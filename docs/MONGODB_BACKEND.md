@@ -1,10 +1,14 @@
 # MongoDB backend setup
 
+_Last verified: 2026-09-08._
+
 ## Why the mobile app uses an API
 
 The MongoDB connection string is a server credential. Android APK and iPhone IPA bundles can be inspected, so placing `MONGODB_URI` in Expo code would expose the database password.
 
-The phone talks only to the Invite Express API. In the target architecture, Firebase Authentication proves identity while the API owns authorization/business rules and MongoDB stores Invite application data.
+The phone talks only to the Invite Express API. Firebase Authentication proves identity while the API owns authorization/business rules and MongoDB stores Invite application data.
+
+For the deployed environment inventory and cutover model, see [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
 
 ## Configure the server
 
@@ -59,30 +63,55 @@ For Firebase development, configure `.env.server` with `AUTH_MODE=firebase`, `FI
 
 See [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md) for client/provider configuration.
 
-## Render deployment
+## Current Render deployments
+
+### Firebase staging
+
+```text
+Render service: invite-someone-api-firebase-e2e
+URL: https://invite-someone-api-firebase-e2e.onrender.com
+branch: impl/firebase-auth
+auto deploy: off
+region: Virginia
+runtime: Node
+build: npm ci
+start: npm run server:start
+AUTH_MODE=firebase
+FIREBASE_PROJECT_ID=invite-someone-app
+MONGODB_DB_NAME=invite_firebase_e2e
+MONGODB_ENSURE_INDEXES_ON_START=false during normal operation
+```
+
+### Production
+
+```text
+Render service: invite-someone-api
+URL: https://invite-someone-api.onrender.com
+branch: main
+auto deploy: off
+health check: /health
+MONGODB_DB_NAME=invite_someone
+AUTH_MODE: compatibility/internal until explicit production cutover
+```
+
+Production must remain untouched during Firebase staging acceptance.
+
+Because Render auto-deploy is disabled, branch HEAD and live deployed commit are independent. Verify both before attributing backend behavior to a source revision.
+
+## Render/Atlas configuration rules
 
 Keep `MONGODB_URI` in Render environment settings. Do not commit it or copy it into Expo build variables.
 
-For a Firebase-enabled isolated service:
-
-```bash
-NODE_ENV=production
-AUTH_MODE=firebase
-FIREBASE_PROJECT_ID=invite-someone-app
-MONGODB_URI=mongodb+srv://...
-MONGODB_DB_NAME=invite_auth_dev
-CORS_ORIGINS=*
-```
-
 After creating or changing an environment:
 
-1. allow only the deployment's required outbound network ranges in Atlas;
-2. create/verify indexes with `npm run server:indexes` or equivalent maintenance;
-3. verify `/health`;
-4. test an authenticated request through the real Firebase identity boundary;
-5. rebuild the phone binary when changing `EXPO_PUBLIC_API_URL` or Firebase/Google public client configuration.
+1. restrict Atlas access to the deployment as tightly as practical;
+2. create/verify indexes with `npm run server:indexes` or a controlled bootstrap;
+3. set `MONGODB_ENSURE_INDEXES_ON_START=false` after bootstrap;
+4. verify `/health`;
+5. test an authenticated request through the real Firebase identity boundary;
+6. rebuild the phone binary only when changing public client configuration such as `EXPO_PUBLIC_API_URL` or Firebase/Google client config.
 
-Free services may sleep after inactivity, so the first request after a quiet period can be slower.
+Free/scale-to-zero services may sleep after inactivity, so the first request after a quiet period can be slower.
 
 ## Connect a development client
 
@@ -92,7 +121,9 @@ Compatibility/internal mode only needs:
 EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
 ```
 
-A Firebase managed-auth client uses the variables documented in [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md), including the Invite API URL and Firebase Web configuration. Google additionally uses public per-platform OAuth client IDs.
+A Firebase managed-auth client uses the variables documented in [FIREBASE_AUTH_SETUP.md](./FIREBASE_AUTH_SETUP.md), including the Invite API URL and Firebase Web configuration.
+
+Android Google Sign-In is configured natively through `google-services.json`, the Google OAuth Android client for package/signing SHA-1, and the associated Web OAuth client. No OAuth client secret or `EXPO_PUBLIC_GOOGLE_*` variables are required for the Android flow.
 
 Android emulators commonly reach a host machine as `10.0.2.2`; physical devices need a reachable LAN/HTTPS development endpoint.
 
@@ -116,16 +147,33 @@ Firebase UIDs are mapped through `user_identities` with `provider=firebase`. Dom
 
 If a verified Firebase email already belongs to a compatibility Invite account and there is no authenticated mapping, provisioning returns `ACCOUNT_LINK_REQUIRED`. Email matching alone never links accounts.
 
+This invariant must be rechecked from the Google Play-installed release candidate before production promotion.
+
+## Current release database gate
+
+The Play-delivered acceptance suite must verify against **only** `invite_firebase_e2e`:
+
+- one Firebase UID -> one stable Invite member;
+- one corresponding `user_identities` mapping;
+- repeated email/password sign-in does not duplicate the member;
+- repeated Google Sign-In does not duplicate the member;
+- password reset preserves the same member;
+- reinstall/re-authentication preserves the same identity mapping;
+- existing-email collision returns `ACCOUNT_LINK_REQUIRED` and creates no mapping.
+
+Do not manually edit identity mappings to make acceptance pass.
+
 ## Production checklist
 
 Before public use:
 
 1. restrict Atlas network access to the API deployment;
 2. use TLS/HTTPS for API and MongoDB connections;
-3. use isolated development/E2E/production databases;
-4. verify Firebase Email/Password and Google provider configuration plus account-linking behavior;
-5. add backups, monitoring, redacted request/audit logs and alerting;
-6. run authorization and final-capacity concurrency tests against staging;
-7. add report/block/moderation and account export/deletion operations;
-8. retire compatibility password/JWT auth only after legacy clients are no longer supported;
-9. replace URL-based profile photos with moderated object-storage uploads when first-party media ships.
+3. keep development/E2E/production databases isolated;
+4. complete the Play-installed Firebase acceptance suite;
+5. verify Firebase Email/Password and Google provider configuration plus account-linking behavior;
+6. add/confirm backups, monitoring, redacted request/audit logs and alerting;
+7. run authorization and final-capacity concurrency tests against staging;
+8. distribute a compatible production client before switching the production API to Firebase-only auth;
+9. retire compatibility password/JWT auth only after legacy clients are no longer supported;
+10. replace URL-based profile photos with moderated object-storage uploads when first-party media ships.
