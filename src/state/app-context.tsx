@@ -4,17 +4,24 @@ import { appReducer, createInitialState } from '@/domain/app-reducer';
 import { createSeedData, DEMO_USER_ID } from '@/data/seed';
 import { clearPersistedState, loadPersistedState, savePersistedState } from '@/data/storage';
 import {
+  blockMongoProfile,
+  cancelMongoActivity,
   createMongoActivity,
   createMongoInvitations,
+  createMongoSafetyReport,
   getMongoSession,
   isMongoApiConfigured,
   joinMongoActivity,
+  leaveMongoActivity,
+  loadMongoBlockedProfiles,
   loadMongoData,
   respondMongoInvitation,
   setMongoActivitySaved,
   signInMongo,
   signOutMongo,
   signUpMongo,
+  unblockMongoProfile,
+  updateMongoActivity,
   updateMongoProfile,
 } from '@/data/mongodb-api';
 import {
@@ -40,6 +47,8 @@ import type {
   InvitationStatus,
   Profile,
   ProfileUpdateInput,
+  SafetyReportDraft,
+  SafetyReportReceipt,
   SignInInput,
   SignUpInput,
 } from '@/types/domain';
@@ -58,6 +67,9 @@ interface AppContextValue {
   signOut: () => Promise<void>;
   updateProfile: (input: ProfileUpdateInput) => Promise<void>;
   createActivity: (draft: ActivityDraft) => Promise<Activity>;
+  updateActivity: (activityId: string, draft: ActivityDraft) => Promise<Activity>;
+  cancelActivity: (activityId: string) => Promise<void>;
+  leaveActivity: (activityId: string) => Promise<void>;
   sendInvitations: (draft: InvitationDraft) => Promise<Invitation[]>;
   respondToInvitation: (
     invitationId: string,
@@ -65,6 +77,10 @@ interface AppContextValue {
   ) => Promise<void>;
   joinActivity: (activityId: string) => Promise<void>;
   toggleSavedActivity: (activityId: string) => Promise<void>;
+  blockProfile: (profileId: string) => Promise<void>;
+  unblockProfile: (profile: Profile) => Promise<void>;
+  loadBlockedProfiles: () => Promise<Profile[]>;
+  reportSafetyConcern: (draft: SafetyReportDraft) => Promise<SafetyReportReceipt>;
   clearError: () => void;
 }
 
@@ -73,6 +89,9 @@ const isRemoteBackendConfigured = isMongoApiConfigured || isSupabaseConfigured;
 
 const friendlyError = (error: unknown) =>
   error instanceof Error ? error : new Error('Something went wrong. Please try again.');
+
+const legacySafetyUnavailable = () =>
+  new Error('This safety action is not available in the legacy preview backend.');
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, createSeedData(), createInitialState);
@@ -161,6 +180,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'set-busy', busy: false });
     }
   }, []);
+
+  const refreshMongoData = useCallback(async () => {
+    const session = state.session;
+    if (!session || session.mode !== 'mongodb') return;
+    const data = await loadMongoData();
+    dispatch({ type: 'start-session', session, data });
+  }, [state.session]);
 
   const startDemo = useCallback(
     () =>
@@ -323,6 +349,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           hostId: userId,
           attendeeIds: [userId],
           invitedIds: [],
+          status: 'active',
           createdAt: new Date().toISOString(),
         };
         const savedActivity =
@@ -334,6 +361,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [run, state.session],
   );
 
+  const updateActivity = useCallback(
+    (activityId: string, draft: ActivityDraft) =>
+      run(async () => {
+        const userId = state.session?.userId;
+        const current = state.activities.find((activity) => activity.id === activityId);
+        if (!userId || !current) throw new Error('The activity could not be found.');
+        if (current.hostId !== userId) throw new Error('Only the host can edit this plan.');
+        if (current.status === 'cancelled') throw new Error('A cancelled plan cannot be edited.');
+        if (draft.capacity < current.attendeeIds.length) {
+          throw new Error(`Capacity cannot be lower than the ${current.attendeeIds.length} people already going.`);
+        }
+        if (state.session?.mode === 'supabase') throw legacySafetyUnavailable();
+        const updated =
+          state.session?.mode === 'mongodb'
+            ? await updateMongoActivity(activityId, draft)
+            : { ...current, ...draft };
+        dispatch({ type: 'update-activity', activity: updated });
+        return updated;
+      }),
+    [run, state.activities, state.session],
+  );
+
+  const cancelActivity = useCallback(
+    (activityId: string) =>
+      run(async () => {
+        const userId = state.session?.userId;
+        const current = state.activities.find((activity) => activity.id === activityId);
+        if (!userId || !current) throw new Error('The activity could not be found.');
+        if (current.hostId !== userId) throw new Error('Only the host can cancel this plan.');
+        if (state.session?.mode === 'supabase') throw legacySafetyUnavailable();
+        if (state.session?.mode === 'mongodb') await cancelMongoActivity(activityId);
+        dispatch({ type: 'cancel-activity', activityId, cancelledAt: new Date().toISOString() });
+      }),
+    [run, state.activities, state.session],
+  );
+
+  const leaveActivity = useCallback(
+    (activityId: string) =>
+      run(async () => {
+        const userId = state.session?.userId;
+        const current = state.activities.find((activity) => activity.id === activityId);
+        if (!userId || !current) throw new Error('The activity could not be found.');
+        if (current.hostId === userId) {
+          throw new Error('Hosts cannot leave their own plan. Edit or cancel it instead.');
+        }
+        if (state.session?.mode === 'supabase') throw legacySafetyUnavailable();
+        if (state.session?.mode === 'mongodb') await leaveMongoActivity(activityId);
+        dispatch({ type: 'leave-activity', activityId, userId });
+      }),
+    [run, state.activities, state.session],
+  );
+
   const sendInvitations = useCallback(
     (draft: InvitationDraft) =>
       run(async () => {
@@ -341,6 +420,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const activity = state.activities.find((candidate) => candidate.id === draft.activityId);
         if (!userId || !activity) throw new Error('The activity could not be found.');
         if (activity.hostId !== userId) throw new Error('Only the host can send invitations.');
+        if (activity.status === 'cancelled') throw new Error('This plan has been cancelled.');
 
         const existingReceivers = new Set(
           state.invitations
@@ -380,6 +460,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       run(async () => {
         const invitation = state.invitations.find((candidate) => candidate.id === invitationId);
         if (!invitation) throw new Error('The invitation could not be found.');
+        const activity = state.activities.find((candidate) => candidate.id === invitation.activityId);
+        if (activity?.status === 'cancelled') throw new Error('This plan has been cancelled.');
         const respondedAt = new Date().toISOString();
         if (state.session?.mode === 'mongodb') {
           await respondMongoInvitation(invitationId, status);
@@ -389,7 +471,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         dispatch({ type: 'respond-invitation', invitationId, status, respondedAt });
       }),
-    [run, state.invitations, state.session?.mode],
+    [run, state.activities, state.invitations, state.session?.mode],
   );
 
   const joinActivity = useCallback(
@@ -398,6 +480,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const userId = state.session?.userId;
         const activity = state.activities.find((candidate) => candidate.id === activityId);
         if (!userId || !activity) throw new Error('The activity could not be found.');
+        if (activity.status === 'cancelled') throw new Error('This plan has been cancelled.');
         if (activity.visibility !== 'community') throw new Error('This activity is invite-only.');
         if (activity.attendeeIds.length >= activity.capacity)
           throw new Error('This activity is full.');
@@ -425,6 +508,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [run, state.savedActivityIds, state.session],
   );
 
+  const blockProfile = useCallback(
+    (profileId: string) =>
+      run(async () => {
+        if (!state.session) throw new Error('Sign in to block a profile.');
+        if (profileId === state.session.userId) throw new Error('You cannot block your own profile.');
+        if (state.session.mode === 'supabase') throw legacySafetyUnavailable();
+        if (state.session.mode === 'mongodb') {
+          await blockMongoProfile(profileId);
+          await refreshMongoData();
+          return;
+        }
+        dispatch({ type: 'block-profile', profileId });
+      }),
+    [refreshMongoData, run, state.session],
+  );
+
+  const unblockProfile = useCallback(
+    (profile: Profile) =>
+      run(async () => {
+        if (!state.session) throw new Error('Sign in to unblock a profile.');
+        if (state.session.mode === 'supabase') throw legacySafetyUnavailable();
+        if (state.session.mode === 'mongodb') {
+          await unblockMongoProfile(profile.id);
+          await refreshMongoData();
+          return;
+        }
+        dispatch({ type: 'restore-profile', profile });
+      }),
+    [refreshMongoData, run, state.session],
+  );
+
+  const loadBlockedProfiles = useCallback(async () => {
+    if (state.session?.mode !== 'mongodb') return [];
+    return loadMongoBlockedProfiles();
+  }, [state.session?.mode]);
+
+  const reportSafetyConcern = useCallback(
+    (draft: SafetyReportDraft) =>
+      run(async (): Promise<SafetyReportReceipt> => {
+        if (!state.session) throw new Error('Sign in to send a report.');
+        if (state.session.mode === 'supabase') throw legacySafetyUnavailable();
+        if (state.session.mode === 'mongodb') return createMongoSafetyReport(draft);
+        return { id: createId('report'), status: 'open', createdAt: new Date().toISOString() };
+      }),
+    [run, state.session],
+  );
+
   const value = useMemo<AppContextValue>(
     () => ({
       state,
@@ -435,10 +565,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       updateProfile,
       createActivity,
+      updateActivity,
+      cancelActivity,
+      leaveActivity,
       sendInvitations,
       respondToInvitation,
       joinActivity,
       toggleSavedActivity,
+      blockProfile,
+      unblockProfile,
+      loadBlockedProfiles,
+      reportSafetyConcern,
       clearError: () => dispatch({ type: 'set-error', error: null }),
     }),
     [
@@ -449,10 +586,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       updateProfile,
       createActivity,
+      updateActivity,
+      cancelActivity,
+      leaveActivity,
       sendInvitations,
       respondToInvitation,
       joinActivity,
       toggleSavedActivity,
+      blockProfile,
+      unblockProfile,
+      loadBlockedProfiles,
+      reportSafetyConcern,
     ],
   );
 
