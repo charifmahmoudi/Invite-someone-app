@@ -157,7 +157,15 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <Button icon="logout" label="Sign out" onPress={logout} variant="danger" />
+        <View style={styles.accountActions}>
+          <Button
+            icon="shield"
+            label="Help & safety"
+            onPress={() => router.push('/help')}
+            variant="outline"
+          />
+          <Button icon="logout" label="Sign out" onPress={logout} variant="danger" />
+        </View>
         <Text style={styles.version}>Invite · MVP 1.0</Text>
       </ScrollView>
     </Screen>
@@ -220,5 +228,6 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   noPlansText: { ...typography.body, color: palette.inkMuted, textAlign: 'center' },
+  accountActions: { gap: spacing.md },
   version: { ...typography.small, color: palette.inkMuted, textAlign: 'center' },
 });
