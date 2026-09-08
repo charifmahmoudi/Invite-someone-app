@@ -10,6 +10,7 @@ import { Screen } from '@/components/ui/screen';
 import { SectionHeader } from '@/components/ui/section-header';
 import { palette, radius, shadow, spacing, typography } from '@/constants/theme';
 import { useApp, useCurrentProfile } from '@/state/app-context';
+import { reliabilityLabel } from '@/utils/format';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -35,6 +36,9 @@ export default function ProfileScreen() {
   };
 
   if (!profile) return null;
+
+  const reliability = reliabilityLabel(profile.completedActivities, profile.reliabilityScore);
+  const hasReliabilityHistory = profile.completedActivities >= 3;
 
   return (
     <Screen>
@@ -79,9 +83,11 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>plans joined</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>{profile.reliabilityScore}%</Text>
-            <Text style={styles.statLabel}>reliable</Text>
+          <View style={styles.stat} accessibilityLabel={reliability}>
+            <Text style={styles.statValue}>
+              {hasReliabilityHistory ? `${profile.reliabilityScore}%` : 'New'}
+            </Text>
+            <Text style={styles.statLabel}>{hasReliabilityHistory ? 'reliable' : 'member'}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
@@ -199,7 +205,7 @@ const styles = StyleSheet.create({
   infoCard: {
     flex: 1,
     borderRadius: radius.lg,
-    backgroundColor: '#FEF3EF',
+    backgroundColor: palette.primarySoft,
     padding: spacing.lg,
     gap: spacing.sm,
   },
