@@ -1,0 +1,20 @@
+appId: com.charifmahmoudi.invite
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- tapOn: Explore the demo
+- extendedWaitUntil:
+    visible: What sounds good?
+    timeout: 30000
+- tapOn: People
+- assertVisible: People worth inviting
+- tapOn: Invites
+- assertVisible: Invitations
+- tapOn: You
+- assertVisible: Plans I host
+- tapOn: Plans
+- assertVisible: What sounds good?
+- tapOn: Create
+- assertVisible: Create an activity
