@@ -1,6 +1,12 @@
 import { MongoClient, ServerApiVersion, type Collection, type Db, type Document } from 'mongodb';
 
-import type { Activity, Invitation, Profile } from '../../src/types/domain';
+import type {
+  Activity,
+  Invitation,
+  Profile,
+  ReportReason,
+  ReportTargetType,
+} from '../../src/types/domain';
 import { config } from './config';
 
 export interface GeoPoint {
@@ -47,12 +53,33 @@ export interface SavedActivityDocument extends Document {
   createdAt: string;
 }
 
+export interface UserBlockDocument extends Document {
+  _id: string;
+  blockerId: string;
+  blockedId: string;
+  createdAt: string;
+}
+
+export interface SafetyReportDocument extends Document {
+  _id: string;
+  reporterId: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  details?: string;
+  status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Collections {
   members: Collection<MemberDocument>;
   userIdentities: Collection<UserIdentityDocument>;
   activities: Collection<ActivityDocument>;
   invitations: Collection<InvitationDocument>;
   savedActivities: Collection<SavedActivityDocument>;
+  userBlocks: Collection<UserBlockDocument>;
+  safetyReports: Collection<SafetyReportDocument>;
 }
 
 const client = new MongoClient(config.mongoUri, {
@@ -77,6 +104,8 @@ const collectionsFor = (database: Db): Collections => ({
   activities: database.collection<ActivityDocument>('activities'),
   invitations: database.collection<InvitationDocument>('invitations'),
   savedActivities: database.collection<SavedActivityDocument>('saved_activities'),
+  userBlocks: database.collection<UserBlockDocument>('user_blocks'),
+  safetyReports: database.collection<SafetyReportDocument>('safety_reports'),
 });
 
 /**
@@ -102,8 +131,15 @@ export const pingDatabase = async () => {
  */
 export const ensureDatabaseIndexes = async () => {
   const database = await getDatabase();
-  const { members, userIdentities, activities, invitations, savedActivities } =
-    collectionsFor(database);
+  const {
+    members,
+    userIdentities,
+    activities,
+    invitations,
+    savedActivities,
+    userBlocks,
+    safetyReports,
+  } = collectionsFor(database);
 
   await Promise.all([
     members.createIndex({ emailNormalized: 1 }, { unique: true }),
@@ -116,10 +152,19 @@ export const ensureDatabaseIndexes = async () => {
     userIdentities.createIndex({ userId: 1 }, { name: 'identity_user' }),
     activities.createIndex({ startAt: 1 }),
     activities.createIndex({ hostId: 1, startAt: 1 }),
+    activities.createIndex({ status: 1, startAt: 1 }),
     invitations.createIndex({ activeKey: 1 }, { unique: true, sparse: true }),
     invitations.createIndex({ receiverId: 1, createdAt: -1 }),
     invitations.createIndex({ senderId: 1, createdAt: -1 }),
     savedActivities.createIndex({ userId: 1, activityId: 1 }, { unique: true }),
+    userBlocks.createIndex(
+      { blockerId: 1, blockedId: 1 },
+      { unique: true, name: 'blocker_blocked_unique' },
+    ),
+    userBlocks.createIndex({ blockedId: 1, createdAt: -1 }),
+    safetyReports.createIndex({ status: 1, createdAt: -1 }),
+    safetyReports.createIndex({ targetType: 1, targetId: 1, createdAt: -1 }),
+    safetyReports.createIndex({ reporterId: 1, createdAt: -1 }),
   ]);
 };
 
