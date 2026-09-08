@@ -65,7 +65,7 @@ Release: Invite Internal 15
 Android versionCode: 5
 ```
 
-Google Play tester enrollment and release visibility are working. The current remaining delivery issue is a generic Play Store error after tapping Install on the physical tester device, so the Play-delivered acceptance suite has not yet passed.
+Google Play tester enrollment, release visibility, and physical-device installation are now working. The Play-delivered build installs and runs on the test phone. The remaining release gate is the complete functional acceptance suite on that Play-installed build; production promotion remains blocked until those checks pass.
 
 The [Play Store Screenshots workflow](./.github/workflows/play-store-screenshots.yml) boots a hardware-accelerated Android emulator, installs the verified staging APK, captures real Invite screens, publishes them to the Play listing, and verifies the listing contains at least two phone screenshots.
 
@@ -182,7 +182,7 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Project status
 
-This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured and `versionCode 5` is visible to enrolled testers. Production `main`, the production Render service, and production MongoDB remain unchanged until the Play-installed acceptance suite passes.
+This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured, `versionCode 5` is visible to enrolled testers, and the Play-delivered build now installs/runs on the test phone. Production `main`, the production Render service, and production MongoDB remain unchanged until the remaining Play-installed functional acceptance suite passes.
 
 See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for the exact completed work and remaining release gates.
 
