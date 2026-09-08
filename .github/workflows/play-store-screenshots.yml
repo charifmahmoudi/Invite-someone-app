@@ -1,0 +1,252 @@
+name: Play Store Screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - impl/firebase-auth
+    paths:
+      - .github/workflows/play-store-screenshots.yml
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: play-store-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture-and-publish:
+    name: Capture staging screenshots and publish listing assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GOOGLE_PLAY_PACKAGE_NAME: com.charifmahmoudi.invite
+      GOOGLE_PLAY_LANGUAGE: en-US
+      FIREBASE_APK_ARTIFACT_ID: '10033981632'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download verified Firebase staging APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/firebase-apk
+          curl --fail-with-body --location --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${FIREBASE_APK_ARTIFACT_ID}/zip" \
+            --output /tmp/firebase-apk.zip
+          unzip -q /tmp/firebase-apk.zip -d /tmp/firebase-apk
+          APK="$(find /tmp/firebase-apk -type f -name '*.apk' -print -quit)"
+          if [ -z "$APK" ]; then
+            echo '::error title=Missing staging APK::The Firebase staging artifact did not contain an APK.'
+            exit 1
+          fi
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          echo "Using staging APK: $APK"
+
+      - name: Capture real app screenshots on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          APK_PATH: ${{ env.APK_PATH }}
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            PACKAGE='com.charifmahmoudi.invite'
+            OUT="$GITHUB_WORKSPACE/play-screenshots"
+            mkdir -p "$OUT"
+
+            adb install -r "$APK_PATH"
+            adb shell pm clear "$PACKAGE" >/dev/null
+            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+
+            dump_ui() {
+              adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+              adb pull /sdcard/window.xml /tmp/window.xml >/dev/null 2>&1 || true
+            }
+
+            wait_for_text() {
+              local needle="$1"
+              local tries="${2:-30}"
+              for ((i=1; i<=tries; i++)); do
+                dump_ui
+                if [ -f /tmp/window.xml ] && grep -Fq "$needle" /tmp/window.xml; then
+                  return 0
+                fi
+                sleep 1
+              done
+              echo "::error title=Android UI timeout::Could not find text: $needle"
+              [ -f /tmp/window.xml ] && cat /tmp/window.xml || true
+              return 1
+            }
+
+            tap_visible_text() {
+              local needle="$1"
+              for attempt in 1 2 3 4 5 6; do
+                dump_ui
+                BOUNDS="$(python3 - "$needle" <<'PY'
+            import re, sys, xml.etree.ElementTree as ET
+            needle = sys.argv[1]
+            try:
+                root = ET.parse('/tmp/window.xml').getroot()
+            except Exception:
+                raise SystemExit(0)
+            for node in root.iter('node'):
+                text = node.attrib.get('text', '')
+                desc = node.attrib.get('content-desc', '')
+                if needle in text or needle in desc:
+                    b = node.attrib.get('bounds', '')
+                    m = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', b)
+                    if m:
+                        x1,y1,x2,y2 = map(int, m.groups())
+                        print(f'{(x1+x2)//2} {(y1+y2)//2}')
+                        raise SystemExit
+            PY
+            )"
+                if [ -n "$BOUNDS" ]; then
+                  read -r X Y <<<"$BOUNDS"
+                  adb shell input tap "$X" "$Y"
+                  return 0
+                fi
+                adb shell input swipe 540 1850 540 650 450
+                sleep 1
+              done
+              echo "::error title=Android UI navigation::Could not tap text: $needle"
+              return 1
+            }
+
+            wait_for_text 'Making friends can start with one simple invite.' 40
+            sleep 1
+            adb exec-out screencap -p > "$OUT/01-welcome.png"
+
+            tap_visible_text 'Explore the demo'
+            wait_for_text 'What sounds good?' 30
+            sleep 2
+            adb exec-out screencap -p > "$OUT/02-discover.png"
+
+            python3 - "$OUT/01-welcome.png" "$OUT/02-discover.png" <<'PY'
+            import os, struct, sys
+            for path in sys.argv[1:]:
+                with open(path, 'rb') as f:
+                    sig = f.read(24)
+                if sig[:8] != b'\x89PNG\r\n\x1a\n':
+                    raise SystemExit(f'Not a PNG: {path}')
+                w, h = struct.unpack('>II', sig[16:24])
+                size = os.path.getsize(path)
+                if w < 320 or h < 320 or w > 3840 or h > 3840:
+                    raise SystemExit(f'Unexpected screenshot dimensions {w}x{h}: {path}')
+                if size < 50000:
+                    raise SystemExit(f'Screenshot looks suspiciously small ({size} bytes): {path}')
+                print(f'{os.path.basename(path)}: {w}x{h}, {size} bytes')
+            PY
+
+      - name: Upload screenshot evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-play-store-screenshots
+          path: play-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Authenticate to Google Cloud for Play listing
+        id: play-auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: invite-someone-app
+          workload_identity_provider: projects/367720887571/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: invite-play-ci@invite-someone-app.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+
+      - name: Publish phone screenshots to Google Play
+        env:
+          GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.play-auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          API_ROOT="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}"
+          UPLOAD_ROOT="https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}"
+
+          fail_api() {
+            local label="$1"
+            local file="$2"
+            echo "::error title=Google Play screenshots::$label"
+            [ -f "$file" ] && cat "$file" >&2
+            exit 1
+          }
+
+          EDIT_RESPONSE=/tmp/play-edit.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$EDIT_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "${API_ROOT}/edits"; then
+            fail_api 'Could not create Play edit.' "$EDIT_RESPONSE"
+          fi
+          EDIT_ID="$(jq -r '.id // empty' "$EDIT_RESPONSE")"
+          [ -n "$EDIT_ID" ] || fail_api 'Play edit did not contain an ID.' "$EDIT_RESPONSE"
+
+          DELETE_RESPONSE=/tmp/play-delete-screenshots.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$DELETE_RESPONSE" \
+            --request DELETE \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            "${API_ROOT}/edits/${EDIT_ID}/listings/${GOOGLE_PLAY_LANGUAGE}/phoneScreenshots"; then
+            fail_api 'Could not clear existing phone screenshots.' "$DELETE_RESPONSE"
+          fi
+
+          for IMAGE in play-screenshots/01-welcome.png play-screenshots/02-discover.png; do
+            NAME="$(basename "$IMAGE")"
+            RESPONSE="/tmp/upload-${NAME}.json"
+            if ! curl --silent --show-error --fail-with-body \
+              --output "$RESPONSE" \
+              --request POST \
+              --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+              --header 'Content-Type: image/png' \
+              --data-binary @"$IMAGE" \
+              "${UPLOAD_ROOT}/edits/${EDIT_ID}/listings/${GOOGLE_PLAY_LANGUAGE}/phoneScreenshots?uploadType=media"; then
+              fail_api "Could not upload ${NAME}." "$RESPONSE"
+            fi
+            jq -r '.image.url // "uploaded"' "$RESPONSE"
+          done
+
+          VALIDATE_RESPONSE=/tmp/play-validate.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$VALIDATE_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "${API_ROOT}/edits/${EDIT_ID}:validate"; then
+            fail_api 'Play edit validation failed.' "$VALIDATE_RESPONSE"
+          fi
+
+          COMMIT_RESPONSE=/tmp/play-commit.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$COMMIT_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "${API_ROOT}/edits/${EDIT_ID}:commit"; then
+            fail_api 'Could not commit Play screenshot edit.' "$COMMIT_RESPONSE"
+          fi
+
+          echo 'Published two real staging-app phone screenshots to Google Play.'
