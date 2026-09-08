@@ -7,6 +7,7 @@ on:
       - 'evidence/**'
       - '.maestro/**'
       - 'scripts/validate-mvp-evidence.mjs'
+      - 'scripts/build-user-manual.mjs'
       - '.github/workflows/mvp-evidence.yml'
       - 'package.json'
   push:
@@ -16,6 +17,7 @@ on:
       - 'evidence/**'
       - '.maestro/**'
       - 'scripts/validate-mvp-evidence.mjs'
+      - 'scripts/build-user-manual.mjs'
       - '.github/workflows/mvp-evidence.yml'
       - 'package.json'
   workflow_dispatch:
@@ -44,5 +46,28 @@ jobs:
         with:
           name: mvp-traceability-${{ github.run_id }}
           path: mvp-traceability.md
+          if-no-files-found: error
+          retention-days: 30
+
+  manual-preview:
+    name: Build user manual preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+      - name: Install document tooling
+        run: sudo apt-get update && sudo apt-get install --yes pandoc wkhtmltopdf
+      - name: Validate evidence contract
+        run: node scripts/validate-mvp-evidence.mjs
+      - name: Build versioned HTML and PDF manual
+        run: node scripts/build-user-manual.mjs --commit "$GITHUB_SHA" --run "$GITHUB_RUN_ID"
+      - name: Upload manual preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-mvp-user-manual-${{ github.run_id }}
+          path: dist/user-manual
           if-no-files-found: error
           retention-days: 30

@@ -82,6 +82,8 @@
     "server:indexes": "tsx server/src/indexes.ts",
     "server:seed": "tsx server/src/seed.ts",
     "validate:mvp": "node scripts/validate-mvp-evidence.mjs",
+    "manual:build": "node scripts/build-user-manual.mjs",
+    "manual:release": "node scripts/build-user-manual.mjs --release true",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
