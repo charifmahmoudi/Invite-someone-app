@@ -84,3 +84,9 @@ The map uses broad public-area centroids. It does not display a member's home or
 ## Support and limitations
 
 The completed manual will include actionable recovery steps for validation, authentication, network, capacity, and authorization failures. Current product exclusions are documented in [the feature catalogue](./FEATURES.md).
+
+## Building this manual
+
+GitHub Actions produces versioned HTML and PDF previews with the tested commit and workflow run embedded in the evidence table. Run `npm run manual:build -- --commit <sha> --run <run-id>` locally after installing Pandoc and wkhtmltopdf.
+
+The release command is intentionally stricter: `npm run manual:release -- --commit <sha> --run <run-id>`. It refuses to publish while any story is not `verified` or a verified screenshot is missing. Generated files belong in CI artifacts under `dist/user-manual/`; they are not accepted product evidence by themselves.
