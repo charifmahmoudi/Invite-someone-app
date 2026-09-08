@@ -138,6 +138,8 @@ STATUS="$(status_request DELETE "/v1/activities/$ACTIVITY_ONE_ID" "$HOST_TOKEN" 
 test "$STATUS" = '204'
 STATUS="$(status_request PUT "/v1/activities/$ACTIVITY_ONE_ID/attendees/me" "$GUEST_TOKEN" '' /tmp/mvp-cancelled-join.json)"
 test "$STATUS" = '409'
+STATUS="$(status_request PUT "/v1/saved-activities/$ACTIVITY_ONE_ID" "$HOST_TOKEN" '' /tmp/mvp-cancelled-save.json)"
+test "$STATUS" = '409'
 
 CANCELLED_INVITE="$(jq -nc --arg activity "$ACTIVITY_ONE_ID" --arg receiver "$GUEST_ID" '{invitations:[{activityId:$activity,receiverId:$receiver,message:"Join the cancelled plan"}]}')"
 STATUS="$(status_request POST '/v1/invitations' "$HOST_TOKEN" "$CANCELLED_INVITE" /tmp/mvp-cancelled-invite.json)"
