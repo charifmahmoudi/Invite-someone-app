@@ -1,6 +1,6 @@
 {
   "$schema": "./story-evidence.schema.json",
-  "version": 1,
+  "version": 2,
   "stories": [
     {
       "id": "US-01",
@@ -14,7 +14,39 @@
       "tests": ["src/__tests__/validation.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-01",
-      "manualAnchor": "us-01--create-an-account-and-preferences"
+      "manualAnchor": "us-01--create-an-account-and-preferences",
+      "criteria": [
+        {
+          "id": "US-01-AC-01",
+          "testLayers": ["unit", "e2e"],
+          "implementationRefs": ["src/app/(auth)/sign-up.tsx", "src/domain/validation.ts"],
+          "testRefs": ["src/__tests__/validation.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-01/01-registration-validation.png"],
+          "manualAnchor": "us-01--create-an-account-and-preferences"
+        },
+        {
+          "id": "US-01-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/app/(auth)/sign-up.tsx", "server/src/app.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-01/02-onboarding-complete.png",
+            "evidence/US-01/03-authenticated-home.png"
+          ],
+          "manualAnchor": "us-01--create-an-account-and-preferences"
+        },
+        {
+          "id": "US-01-AC-03",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["server/src/identity-router.ts", "server/src/app.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-01/04-account-link-required.png"],
+          "manualAnchor": "us-01--create-an-account-and-preferences"
+        }
+      ]
     },
     {
       "id": "US-02",
@@ -28,7 +60,34 @@
       "tests": ["src/__tests__/validation.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-02",
-      "manualAnchor": "us-02--edit-a-profile"
+      "manualAnchor": "us-02--edit-a-profile",
+      "criteria": [
+        {
+          "id": "US-02-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": [
+            "src/app/profile/edit.tsx",
+            "src/domain/validation.ts",
+            "server/src/app.ts"
+          ],
+          "testRefs": ["src/__tests__/validation.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-02/01-profile-before.png",
+            "evidence/US-02/02-profile-updated.png"
+          ],
+          "manualAnchor": "us-02--edit-a-profile"
+        },
+        {
+          "id": "US-02-AC-02",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/profile/edit.tsx", "server/src/app.ts"],
+          "testRefs": ["src/__tests__/validation.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-02/03-profile-validation.png"],
+          "manualAnchor": "us-02--edit-a-profile"
+        }
+      ]
     },
     {
       "id": "US-03",
@@ -42,7 +101,27 @@
       "tests": ["src/__tests__/profile-discovery.test.ts", "src/__tests__/matching.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-03",
-      "manualAnchor": "us-03--discover-compatible-people"
+      "manualAnchor": "us-03--discover-compatible-people",
+      "criteria": [
+        {
+          "id": "US-03-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/(tabs)/people.tsx", "src/domain/profile-discovery.ts"],
+          "testRefs": ["src/__tests__/profile-discovery.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-03/01-people-search.png"],
+          "manualAnchor": "us-03--discover-compatible-people"
+        },
+        {
+          "id": "US-03-AC-02",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/domain/matching.ts", "src/components/profile-card.tsx"],
+          "testRefs": ["src/__tests__/matching.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-03/02-recommendation-reasons.png"],
+          "manualAnchor": "us-03--discover-compatible-people"
+        }
+      ]
     },
     {
       "id": "US-04",
@@ -52,7 +131,30 @@
       "tests": ["src/__tests__/validation.test.ts", "src/__tests__/app-reducer.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-04",
-      "manualAnchor": "us-04--create-an-activity"
+      "manualAnchor": "us-04--create-an-activity",
+      "criteria": [
+        {
+          "id": "US-04-AC-01",
+          "testLayers": ["unit", "e2e"],
+          "implementationRefs": ["src/app/create.tsx", "src/domain/validation.ts"],
+          "testRefs": ["src/__tests__/validation.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-04/01-activity-validation.png"],
+          "manualAnchor": "us-04--create-an-activity"
+        },
+        {
+          "id": "US-04-AC-02",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/create.tsx", "server/src/app.ts"],
+          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-04/02-activity-form.png",
+            "evidence/US-04/03-created-activity.png"
+          ],
+          "manualAnchor": "us-04--create-an-activity"
+        }
+      ]
     },
     {
       "id": "US-05",
@@ -66,7 +168,30 @@
       "tests": ["src/__tests__/matching.test.ts", "src/__tests__/app-reducer.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-05",
-      "manualAnchor": "us-05--select-and-invite-recommended-members"
+      "manualAnchor": "us-05--select-and-invite-recommended-members",
+      "criteria": [
+        {
+          "id": "US-05-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/invite/[activityId].tsx", "src/domain/matching.ts"],
+          "testRefs": ["src/__tests__/matching.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-05/01-eligible-invitees.png"],
+          "manualAnchor": "us-05--select-and-invite-recommended-members"
+        },
+        {
+          "id": "US-05-AC-02",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/invite/[activityId].tsx", "server/src/app.ts"],
+          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-05/02-invitation-note.png",
+            "evidence/US-05/03-sent-invitation.png"
+          ],
+          "manualAnchor": "us-05--select-and-invite-recommended-members"
+        }
+      ]
     },
     {
       "id": "US-06",
@@ -80,7 +205,30 @@
       "tests": ["src/__tests__/app-reducer.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-06",
-      "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation"
+      "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation",
+      "criteria": [
+        {
+          "id": "US-06-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/(tabs)/invitations.tsx", "server/src/app.ts"],
+          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-06/01-pending-invitation.png",
+            "evidence/US-06/02-invitation-decision.png"
+          ],
+          "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation"
+        },
+        {
+          "id": "US-06-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/app/(tabs)/invitations.tsx", "server/src/app.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-06/03-cancelled-invitation.png"],
+          "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation"
+        }
+      ]
     },
     {
       "id": "US-07",
@@ -90,7 +238,27 @@
       "tests": ["src/__tests__/app-reducer.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-07",
-      "manualAnchor": "us-07--join-a-community-activity"
+      "manualAnchor": "us-07--join-a-community-activity",
+      "criteria": [
+        {
+          "id": "US-07-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/activity/[id].tsx", "server/src/app.ts"],
+          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-07/01-joined-activity.png"],
+          "manualAnchor": "us-07--join-a-community-activity"
+        },
+        {
+          "id": "US-07-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/app/activity/[id].tsx", "server/src/app.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-07/02-join-unavailable.png"],
+          "manualAnchor": "us-07--join-a-community-activity"
+        }
+      ]
     },
     {
       "id": "US-08",
@@ -104,7 +272,34 @@
       "tests": ["src/__tests__/app-reducer.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-08",
-      "manualAnchor": "us-08--save-an-activity"
+      "manualAnchor": "us-08--save-an-activity",
+      "criteria": [
+        {
+          "id": "US-08-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": [
+            "src/components/activity-card.tsx",
+            "src/state/app-context.tsx",
+            "server/src/app.ts"
+          ],
+          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-08/01-activity-unsaved.png",
+            "evidence/US-08/02-save-restored.png"
+          ],
+          "manualAnchor": "us-08--save-an-activity"
+        },
+        {
+          "id": "US-08-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/state/app-context.tsx", "src/data/mongodb-api.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-08/03-save-error.png"],
+          "manualAnchor": "us-08--save-an-activity"
+        }
+      ]
     },
     {
       "id": "US-09",
@@ -114,7 +309,30 @@
       "tests": [],
       "e2e": null,
       "evidence": "evidence/US-09",
-      "manualAnchor": "us-09--review-hosts-and-attendees"
+      "manualAnchor": "us-09--review-hosts-and-attendees",
+      "criteria": [
+        {
+          "id": "US-09-AC-01",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/app/activity/[id].tsx", "src/app/person/[id].tsx"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-09/01-activity-trust.png",
+            "evidence/US-09/02-attendee-profile.png"
+          ],
+          "manualAnchor": "us-09--review-hosts-and-attendees"
+        },
+        {
+          "id": "US-09-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["server/src/app.ts", "src/app/activity/[id].tsx"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-09/03-restricted-activity.png"],
+          "manualAnchor": "us-09--review-hosts-and-attendees"
+        }
+      ]
     },
     {
       "id": "US-10",
@@ -124,7 +342,21 @@
       "tests": [],
       "e2e": null,
       "evidence": "evidence/US-10",
-      "manualAnchor": "us-10--follow-first-meeting-safety-guidance"
+      "manualAnchor": "us-10--follow-first-meeting-safety-guidance",
+      "criteria": [
+        {
+          "id": "US-10-AC-01",
+          "testLayers": ["component", "e2e"],
+          "implementationRefs": ["src/app/(tabs)/invitations.tsx", "src/app/activity/[id].tsx"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-10/01-invitation-safety.png",
+            "evidence/US-10/02-activity-safety.png"
+          ],
+          "manualAnchor": "us-10--follow-first-meeting-safety-guidance"
+        }
+      ]
     },
     {
       "id": "US-11",
@@ -134,7 +366,30 @@
       "tests": ["src/__tests__/profile-discovery.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-11",
-      "manualAnchor": "us-11--combine-discovery-filters"
+      "manualAnchor": "us-11--combine-discovery-filters",
+      "criteria": [
+        {
+          "id": "US-11-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": ["src/app/(tabs)/people.tsx", "src/domain/profile-discovery.ts"],
+          "testRefs": ["src/__tests__/profile-discovery.test.ts"],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-11/01-combined-filters.png"],
+          "manualAnchor": "us-11--combine-discovery-filters"
+        },
+        {
+          "id": "US-11-AC-02",
+          "testLayers": ["unit", "e2e"],
+          "implementationRefs": ["src/app/(tabs)/people.tsx", "src/domain/profile-discovery.ts"],
+          "testRefs": ["src/__tests__/profile-discovery.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-11/02-no-results.png",
+            "evidence/US-11/03-filters-cleared.png"
+          ],
+          "manualAnchor": "us-11--combine-discovery-filters"
+        }
+      ]
     },
     {
       "id": "US-12",
@@ -144,7 +399,33 @@
       "tests": ["src/__tests__/profile-discovery.test.ts"],
       "e2e": null,
       "evidence": "evidence/US-12",
-      "manualAnchor": "us-12--use-the-approximate-area-map"
+      "manualAnchor": "us-12--use-the-approximate-area-map",
+      "criteria": [
+        {
+          "id": "US-12-AC-01",
+          "testLayers": ["unit", "api", "e2e"],
+          "implementationRefs": [
+            "src/components/people-map.tsx",
+            "src/domain/profile-discovery.ts"
+          ],
+          "testRefs": ["src/__tests__/profile-discovery.test.ts"],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-12/01-approximate-map.png",
+            "evidence/US-12/02-map-profile.png"
+          ],
+          "manualAnchor": "us-12--use-the-approximate-area-map"
+        },
+        {
+          "id": "US-12-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/components/people-map.tsx", "server/src/app.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-12/03-area-disclosure.png"],
+          "manualAnchor": "us-12--use-the-approximate-area-map"
+        }
+      ]
     },
     {
       "id": "US-13",
@@ -158,7 +439,34 @@
       "tests": [],
       "e2e": null,
       "evidence": "evidence/US-13",
-      "manualAnchor": "us-13--review-a-persons-profile"
+      "manualAnchor": "us-13--review-a-persons-profile",
+      "criteria": [
+        {
+          "id": "US-13-AC-01",
+          "testLayers": ["component", "e2e"],
+          "implementationRefs": [
+            "src/components/ui/avatar.tsx",
+            "src/components/profile-card.tsx",
+            "src/app/person/[id].tsx"
+          ],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": [
+            "evidence/US-13/01-avatar-fallback.png",
+            "evidence/US-13/02-person-profile.png"
+          ],
+          "manualAnchor": "us-13--review-a-persons-profile"
+        },
+        {
+          "id": "US-13-AC-02",
+          "testLayers": ["api", "e2e"],
+          "implementationRefs": ["src/app/person/[id].tsx", "server/src/app.ts"],
+          "testRefs": [],
+          "e2eFlow": null,
+          "screenshots": ["evidence/US-13/03-invite-unavailable.png"],
+          "manualAnchor": "us-13--review-a-persons-profile"
+        }
+      ]
     }
   ]
 }

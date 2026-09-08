@@ -38,4 +38,11 @@ jobs:
         with:
           node-version: 22.13
       - name: Validate MVP evidence manifest
-        run: node scripts/validate-mvp-evidence.mjs
+        run: node scripts/validate-mvp-evidence.mjs --report mvp-traceability.md
+      - name: Upload traceability report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvp-traceability-${{ github.run_id }}
+          path: mvp-traceability.md
+          if-no-files-found: error
+          retention-days: 30
