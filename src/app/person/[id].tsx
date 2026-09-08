@@ -16,7 +16,7 @@ import { reliabilityLabel } from '@/utils/format';
 export default function PersonDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { state, sendInvitations, toggleSavedActivity } = useApp();
+  const { blockProfile, sendInvitations, state, toggleSavedActivity } = useApp();
   const currentProfile = useCurrentProfile();
   const profile = state.profiles.find((candidate) => candidate.id === id);
   const [referenceTime] = useState(() => Date.now());
@@ -38,14 +38,18 @@ export default function PersonDetailsScreen() {
   );
   const hosted = state.activities.filter(
     (activity) =>
-      activity.hostId === profile.id && new Date(activity.startAt).getTime() > referenceTime,
+      activity.hostId === profile.id &&
+      activity.status !== 'cancelled' &&
+      new Date(activity.startAt).getTime() > referenceTime,
   );
   const myHosted = state.activities.filter(
     (activity) =>
       activity.hostId === state.session?.userId &&
+      activity.status !== 'cancelled' &&
       new Date(activity.startAt).getTime() > referenceTime &&
       !activity.invitedIds.includes(profile.id),
   );
+  const reliability = reliabilityLabel(profile.completedActivities, profile.reliabilityScore);
 
   const invite = (activityId: string) => {
     const activity = state.activities.find((candidate) => candidate.id === activityId);
@@ -61,7 +65,7 @@ export default function PersonDetailsScreen() {
             void sendInvitations({
               activityId,
               receiverIds: [profile.id],
-              message: 'This made me think of you — would you like to join?',
+              message: `This made me think of you — would you like to join?`,
             })
               .then(() =>
                 Alert.alert(
@@ -81,10 +85,46 @@ export default function PersonDetailsScreen() {
     );
   };
 
+  const report = () => {
+    router.push({
+      pathname: '/report',
+      params: {
+        targetType: 'profile',
+        targetId: profile.id,
+        targetName: profile.name,
+      },
+    });
+  };
+
+  const block = () => {
+    const firstName = profile.name.split(' ')[0];
+    Alert.alert(
+      `Block ${firstName}?`,
+      `You and ${firstName} will stop appearing in each other’s discovery and new invitations will be prevented. Pending invitations between you will be cancelled. ${firstName} will not be notified that you blocked them.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => {
+            void blockProfile(profile.id)
+              .then(() => router.replace('/(tabs)/people'))
+              .catch((error: unknown) =>
+                Alert.alert(
+                  'Unable to block profile',
+                  error instanceof Error ? error.message : 'Please try again.',
+                ),
+              );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ScrollScreen contentContainerStyle={styles.scroll}>
       <ScreenHeader onBack={() => router.back()} title="Profile" />
-      <View style={styles.content}>
+      <View style={styles.content} testID="person-details-screen">
         <View style={styles.hero}>
           <Avatar profile={profile} size={96} />
           <View style={styles.nameRow}>
@@ -94,12 +134,6 @@ export default function PersonDetailsScreen() {
           <Text style={styles.handle}>
             @{profile.handle} · {profile.approximateLocation?.area ?? profile.city}
           </Text>
-          {profile.isVerified ? (
-            <View style={styles.verifiedEmail}>
-              <AppIcon name="check" color={palette.forest} size={14} />
-              <Text style={styles.verifiedEmailText}>Verified email</Text>
-            </View>
-          ) : null}
           {profile.approximateLocation ? (
             <View style={styles.approximateArea}>
               <AppIcon name="shield" color={palette.forest} size={15} />
@@ -109,10 +143,7 @@ export default function PersonDetailsScreen() {
           <Text style={styles.headline}>{profile.headline}</Text>
           <Text style={styles.bio}>{profile.bio}</Text>
           <View style={styles.stats}>
-            <Pill
-              label={reliabilityLabel(profile.completedActivities, profile.reliabilityScore)}
-              tone="success"
-            />
+            <Pill label={reliability} tone="success" />
             <Pill label={`${profile.completedActivities} plans joined`} />
           </View>
         </View>
@@ -212,6 +243,20 @@ export default function PersonDetailsScreen() {
             </View>
           </View>
         ) : null}
+
+        <View style={styles.safetyActions}>
+          <View style={styles.safetyHeading}>
+            <AppIcon name="shield" color={palette.forest} size={22} />
+            <View style={styles.safetyCopy}>
+              <Text style={styles.safetyTitle}>Safety controls</Text>
+              <Text style={styles.safetyBody}>
+                Reports go to Invite for review. Blocking is private and immediately limits future interaction.
+              </Text>
+            </View>
+          </View>
+          <Button label="Report profile" onPress={report} testID="report-profile" variant="outline" />
+          <Button label="Block profile" onPress={block} testID="block-profile" variant="danger" />
+        </View>
       </View>
     </ScrollScreen>
   );
@@ -231,8 +276,6 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   name: { ...typography.h1, color: palette.ink },
   handle: { ...typography.small, color: palette.inkMuted },
-  verifiedEmail: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  verifiedEmailText: { ...typography.micro, color: palette.forest },
   approximateArea: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   approximateAreaText: { ...typography.micro, color: palette.forest },
   headline: { ...typography.h3, color: palette.ink, textAlign: 'center', marginTop: spacing.sm },
@@ -291,6 +334,18 @@ const styles = StyleSheet.create({
   },
   createText: { ...typography.body, color: palette.inkMuted, textAlign: 'center' },
   activities: { gap: spacing.lg },
+  safetyActions: {
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    padding: spacing.lg,
+  },
+  safetyHeading: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
+  safetyCopy: { flex: 1, gap: spacing.xs },
+  safetyTitle: { ...typography.bodyStrong, color: palette.ink },
+  safetyBody: { ...typography.small, color: palette.inkMuted },
   notFound: {
     ...typography.body,
     color: palette.inkMuted,
