@@ -202,7 +202,7 @@
         "src/app/activity/[id].tsx",
         "server/src/app.ts"
       ],
-      "tests": ["src/__tests__/app-reducer.test.ts"],
+      "tests": ["src/__tests__/app-reducer.test.ts", "server/src/__tests__/api.integration.ts"],
       "e2e": null,
       "evidence": "evidence/US-06",
       "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation",
@@ -211,7 +211,10 @@
           "id": "US-06-AC-01",
           "testLayers": ["unit", "api", "e2e"],
           "implementationRefs": ["src/app/(tabs)/invitations.tsx", "server/src/app.ts"],
-          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "testRefs": [
+            "src/__tests__/app-reducer.test.ts",
+            "server/src/__tests__/api.integration.ts"
+          ],
           "e2eFlow": null,
           "screenshots": [
             "evidence/US-06/01-pending-invitation.png",
@@ -223,7 +226,7 @@
           "id": "US-06-AC-02",
           "testLayers": ["api", "e2e"],
           "implementationRefs": ["src/app/(tabs)/invitations.tsx", "server/src/app.ts"],
-          "testRefs": [],
+          "testRefs": ["server/src/__tests__/api.integration.ts"],
           "e2eFlow": null,
           "screenshots": ["evidence/US-06/03-cancelled-invitation.png"],
           "manualAnchor": "us-06--accept-decline-or-cancel-an-invitation"
@@ -235,7 +238,7 @@
       "feature": "participation-trust",
       "status": "partial",
       "implementation": ["src/app/activity/[id].tsx", "server/src/app.ts"],
-      "tests": ["src/__tests__/app-reducer.test.ts"],
+      "tests": ["src/__tests__/app-reducer.test.ts", "server/src/__tests__/api.integration.ts"],
       "e2e": null,
       "evidence": "evidence/US-07",
       "manualAnchor": "us-07--join-a-community-activity",
@@ -244,7 +247,10 @@
           "id": "US-07-AC-01",
           "testLayers": ["unit", "api", "e2e"],
           "implementationRefs": ["src/app/activity/[id].tsx", "server/src/app.ts"],
-          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "testRefs": [
+            "src/__tests__/app-reducer.test.ts",
+            "server/src/__tests__/api.integration.ts"
+          ],
           "e2eFlow": null,
           "screenshots": ["evidence/US-07/01-joined-activity.png"],
           "manualAnchor": "us-07--join-a-community-activity"
@@ -269,7 +275,7 @@
         "src/state/app-context.tsx",
         "server/src/app.ts"
       ],
-      "tests": ["src/__tests__/app-reducer.test.ts"],
+      "tests": ["src/__tests__/app-reducer.test.ts", "server/src/__tests__/api.integration.ts"],
       "e2e": null,
       "evidence": "evidence/US-08",
       "manualAnchor": "us-08--save-an-activity",
@@ -282,7 +288,10 @@
             "src/state/app-context.tsx",
             "server/src/app.ts"
           ],
-          "testRefs": ["src/__tests__/app-reducer.test.ts"],
+          "testRefs": [
+            "src/__tests__/app-reducer.test.ts",
+            "server/src/__tests__/api.integration.ts"
+          ],
           "e2eFlow": null,
           "screenshots": [
             "evidence/US-08/01-activity-unsaved.png",
@@ -306,7 +315,7 @@
       "feature": "participation-trust",
       "status": "partial",
       "implementation": ["src/app/activity/[id].tsx", "src/app/person/[id].tsx"],
-      "tests": [],
+      "tests": ["server/src/__tests__/api.integration.ts"],
       "e2e": null,
       "evidence": "evidence/US-09",
       "manualAnchor": "us-09--review-hosts-and-attendees",
@@ -327,7 +336,7 @@
           "id": "US-09-AC-02",
           "testLayers": ["api", "e2e"],
           "implementationRefs": ["server/src/app.ts", "src/app/activity/[id].tsx"],
-          "testRefs": [],
+          "testRefs": ["server/src/__tests__/api.integration.ts"],
           "e2eFlow": null,
           "screenshots": ["evidence/US-09/03-restricted-activity.png"],
           "manualAnchor": "us-09--review-hosts-and-attendees"

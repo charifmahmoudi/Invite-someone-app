@@ -76,6 +76,7 @@
     "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
     "test": "jest",
     "test:ci": "jest --ci --coverage --runInBand",
+    "test:api-integration": "tsx --test server/src/__tests__/api.integration.ts",
     "server:dev": "tsx watch server/src/index.ts",
     "server:start": "tsx server/src/index.ts",
     "server:indexes": "tsx server/src/indexes.ts",
