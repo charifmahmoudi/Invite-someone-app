@@ -24,11 +24,72 @@ describe('core user story state transitions', () => {
       invitedIds: [],
       visibility: 'community',
       vibe: 'Easygoing',
+      status: 'active',
       createdAt: new Date().toISOString(),
     };
     const next = appReducer(readyState(), { type: 'create-activity', activity });
     expect(next.activities[0]).toEqual(activity);
     expect(next.activities[0].attendeeIds).toContain(DEMO_USER_ID);
+  });
+
+  it('PLAN-02 updates the editable fields of a hosted plan', () => {
+    const state = readyState();
+    const existing = state.activities.find((item) => item.id === 'activity-games')!;
+    const updated: Activity = { ...existing, title: 'Updated low-stakes game night', capacity: 8 };
+    const next = appReducer(state, { type: 'update-activity', activity: updated });
+    expect(next.activities.find((item) => item.id === existing.id)?.title).toBe(updated.title);
+    expect(next.activities.find((item) => item.id === existing.id)?.capacity).toBe(8);
+  });
+
+  it('PLAN-03 cancels a plan without deleting history and cancels pending invitations', () => {
+    const cancelledAt = new Date().toISOString();
+    const next = appReducer(readyState(), {
+      type: 'cancel-activity',
+      activityId: 'activity-games',
+      cancelledAt,
+    });
+    const activity = next.activities.find((item) => item.id === 'activity-games');
+    expect(activity?.status).toBe('cancelled');
+    expect(activity?.cancelledAt).toBe(cancelledAt);
+    expect(next.invitations.find((item) => item.id === 'invite-games-nadia')?.status).toBe(
+      'cancelled',
+    );
+    expect(next.activities.some((item) => item.id === 'activity-games')).toBe(true);
+  });
+
+  it('PLAN-04 removes an attendee when they leave', () => {
+    const state = readyState();
+    const joined = appReducer(state, {
+      type: 'join-activity',
+      activityId: 'activity-sketch',
+      userId: DEMO_USER_ID,
+    });
+    const next = appReducer(joined, {
+      type: 'leave-activity',
+      activityId: 'activity-sketch',
+      userId: DEMO_USER_ID,
+    });
+    expect(next.activities.find((item) => item.id === 'activity-sketch')?.attendeeIds).not.toContain(
+      DEMO_USER_ID,
+    );
+  });
+
+  it('SAFE-01 removes a blocked profile and their hosted plans from local discovery state', () => {
+    const state = readyState();
+    const hostedIds = state.activities
+      .filter((activity) => activity.hostId === 'profile-maya')
+      .map((activity) => activity.id);
+    expect(hostedIds.length).toBeGreaterThan(0);
+    const next = appReducer(state, { type: 'block-profile', profileId: 'profile-maya' });
+    expect(next.profiles.some((profile) => profile.id === 'profile-maya')).toBe(false);
+    expect(next.activities.some((activity) => activity.hostId === 'profile-maya')).toBe(false);
+    expect(
+      next.invitations.some(
+        (invitation) =>
+          invitation.senderId === 'profile-maya' || invitation.receiverId === 'profile-maya',
+      ),
+    ).toBe(false);
+    expect(next.savedActivityIds.some((id) => hostedIds.includes(id))).toBe(false);
   });
 
   it('US-05 records sent invitations on the activity', () => {
