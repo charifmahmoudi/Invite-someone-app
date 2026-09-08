@@ -1,0 +1,78 @@
+appId: com.charifmahmoudi.invite
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- tapOn: Explore the demo
+- extendedWaitUntil:
+    visible: What sounds good?
+    timeout: 30000
+
+# Create a complete plan using the default future date, city, category, capacity, visibility and vibe.
+- tapOn: Create
+- assertVisible:
+    id: create-plan-screen
+- tapOn:
+    id: create-plan-title
+- inputText: CI coffee plan
+- tapOn:
+    id: create-plan-description
+- inputText: A small low pressure coffee meetup created by the Android MVP lifecycle test.
+- tapOn:
+    id: create-plan-location
+- inputText: CI Cafe Alexanderplatz
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: create-plan-submit
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: create-plan-submit
+- extendedWaitUntil:
+    visible: Invite people
+    timeout: 20000
+- assertVisible: CI coffee plan
+- tapOn: Skip for now
+- extendedWaitUntil:
+    visible: CI coffee plan
+    timeout: 20000
+- assertVisible:
+    id: edit-plan
+
+# Edit the plan and prove the new title is rendered back on the detail screen.
+- tapOn:
+    id: edit-plan
+- assertVisible:
+    id: edit-plan-screen
+- tapOn: CI coffee plan
+- eraseText: 50
+- inputText: CI coffee plan updated
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: edit-plan-submit
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: edit-plan-submit
+- extendedWaitUntil:
+    visible: CI coffee plan updated
+    timeout: 20000
+
+# Cancellation is soft: the plan remains visible as history but becomes non-interactive.
+- scrollUntilVisible:
+    element:
+      id: cancel-plan
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: cancel-plan
+- assertVisible: Cancel this plan?
+- tapOn: Cancel plan
+- extendedWaitUntil:
+    visible: This plan is cancelled
+    timeout: 20000
+- assertNotVisible:
+    id: edit-plan
