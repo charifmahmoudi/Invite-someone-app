@@ -7,15 +7,16 @@ import {
 } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { isFirebaseAuthConfigured } from '@/auth/firebase-provider';
 import { getGoogleIdToken, isGoogleSignInAvailable } from '@/auth/google-sign-in';
 import { Button } from '@/components/ui/button';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { InputField } from '@/components/ui/input-field';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScrollScreen } from '@/components/ui/screen';
-import { palette, radius, spacing, typography } from '@/constants/theme';
+import { palette, spacing, typography } from '@/constants/theme';
 import { firebaseAuth } from '@/data/firebase';
 import { firstValidationMessage, signInSchema } from '@/domain/validation';
 import { useApp } from '@/state/app-context';
@@ -86,26 +87,32 @@ function FirebaseSignInScreen() {
   const [busy, setBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [formError, setFormError] = useState<string>();
+  const [formNotice, setFormNotice] = useState<string>();
+
+  const showError = (message: string | undefined) => {
+    setFormNotice(undefined);
+    setFormError(message);
+  };
 
   const submit = async () => {
     const result = signInSchema.safeParse({ email: email.trim(), password });
     if (!result.success) {
-      setFormError(firstValidationMessage(result.error));
+      showError(firstValidationMessage(result.error));
       return;
     }
     const auth = firebaseAuth;
     if (!auth) {
-      setFormError('Firebase Auth is not configured.');
+      showError('Firebase Auth is not configured.');
       return;
     }
 
-    setFormError(undefined);
+    showError(undefined);
     setBusy(true);
     try {
       await signInWithEmailAndPassword(auth, result.data.email, result.data.password);
       router.replace('/');
     } catch (error) {
-      setFormError(firebaseErrorMessage(error, 'Unable to sign in.'));
+      showError(firebaseErrorMessage(error, 'Unable to sign in.'));
     } finally {
       setBusy(false);
     }
@@ -114,22 +121,24 @@ function FirebaseSignInScreen() {
   const resetPassword = async () => {
     const trimmed = email.trim();
     if (!trimmed || !trimmed.includes('@')) {
-      setFormError('Enter your email first, then choose Forgot password.');
+      showError('Enter your email first, then choose Forgot password.');
       return;
     }
     const auth = firebaseAuth;
-    if (!auth) return;
+    if (!auth) {
+      showError('Firebase Auth is not configured.');
+      return;
+    }
 
-    setFormError(undefined);
+    showError(undefined);
     setResetBusy(true);
     try {
       await sendPasswordResetEmail(auth, trimmed);
-      Alert.alert(
-        'Check your inbox',
-        'If an account uses that email, Firebase will send password-reset instructions.',
+      setFormNotice(
+        'If an account uses that email, Firebase will send password-reset instructions. Check your inbox and spam folder.',
       );
     } catch (error) {
-      setFormError(firebaseErrorMessage(error, 'Unable to send password-reset instructions.'));
+      showError(firebaseErrorMessage(error, 'Unable to send password-reset instructions.'));
     } finally {
       setResetBusy(false);
     }
@@ -153,7 +162,10 @@ function FirebaseSignInScreen() {
             autoComplete="email"
             keyboardType="email-address"
             label="Email"
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              setFormNotice(undefined);
+            }}
             placeholder="you@example.com"
             returnKeyType="next"
             testID="auth-email"
@@ -163,7 +175,10 @@ function FirebaseSignInScreen() {
             autoCapitalize="none"
             autoComplete="password"
             label="Password"
-            onChangeText={setPassword}
+            onChangeText={(value) => {
+              setPassword(value);
+              setFormNotice(undefined);
+            }}
             onSubmitEditing={() => void submit()}
             placeholder="Your password"
             returnKeyType="done"
@@ -172,9 +187,15 @@ function FirebaseSignInScreen() {
             value={password}
           />
           {formError ? (
-            <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
-              {formError}
-            </Text>
+            <FeedbackBanner
+              body={formError}
+              testID="auth-error"
+              title="We couldn't sign you in"
+              tone="error"
+            />
+          ) : null}
+          {formNotice ? (
+            <FeedbackBanner body={formNotice} title="Check your inbox" tone="success" />
           ) : null}
           <Button label="Sign in" loading={busy} onPress={() => void submit()} testID="auth-submit" />
           <Button
@@ -192,10 +213,7 @@ function FirebaseSignInScreen() {
                 <Text style={styles.dividerText}>or</Text>
                 <View style={styles.divider} />
               </View>
-              <GoogleSignInButton
-                onError={setFormError}
-                onSuccess={() => router.replace('/')}
-              />
+              <GoogleSignInButton onError={showError} onSuccess={() => router.replace('/')} />
             </>
           ) : null}
         </View>
@@ -239,7 +257,7 @@ function LegacySignInScreen() {
   const useDemoCredentials = () => {
     setEmail('demo@invite.app');
     setPassword('invite-demo');
-    Alert.alert('Demo account ready', 'Tap Sign in to continue.');
+    setFormError(undefined);
   };
 
   return (
@@ -250,23 +268,17 @@ function LegacySignInScreen() {
           <Text style={styles.eyebrow}>WELCOME BACK</Text>
           <Text style={styles.title}>Your next good plan is waiting.</Text>
           <Text style={styles.subtitle}>
-            Sign in to see invitations, people, and activities picked for you.
+            Sign in to see invitations, people and plans picked for you.
           </Text>
         </View>
 
         {!isProductionBackend ? (
-          <View style={styles.demoCard}>
-            <Text style={styles.demoTitle}>Reviewing the app?</Text>
-            <Text style={styles.demoBody}>
-              Use demo@invite.app with any password, or open the full demo from the welcome screen.
-            </Text>
-            <Button
-              fullWidth={false}
-              label="Fill demo details"
-              onPress={useDemoCredentials}
-              variant="ghost"
-            />
-          </View>
+          <FeedbackBanner
+            actionLabel="Fill demo details"
+            body="Use demo@invite.app with any password, or open the full demo from the welcome screen."
+            onAction={useDemoCredentials}
+            title="Reviewing the app?"
+          />
         ) : null}
 
         <View style={styles.form}>
@@ -294,9 +306,12 @@ function LegacySignInScreen() {
             value={password}
           />
           {formError ? (
-            <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
-              {formError}
-            </Text>
+            <FeedbackBanner
+              body={formError}
+              testID="auth-error"
+              title="We couldn't sign you in"
+              tone="error"
+            />
           ) : null}
           <Button label="Sign in" loading={state.busy} onPress={() => void submit()} testID="auth-submit" />
         </View>
@@ -326,16 +341,7 @@ const styles = StyleSheet.create({
   eyebrow: { ...typography.micro, color: palette.primaryDark },
   title: { ...typography.h1, color: palette.ink },
   subtitle: { ...typography.body, color: palette.inkMuted },
-  demoCard: {
-    borderRadius: radius.lg,
-    backgroundColor: palette.forestSoft,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  demoTitle: { ...typography.bodyStrong, color: palette.forest },
-  demoBody: { ...typography.small, color: palette.inkMuted },
   form: { gap: spacing.lg },
-  error: { ...typography.small, color: palette.error },
   footer: { alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
   footerText: { ...typography.body, color: palette.inkMuted },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
