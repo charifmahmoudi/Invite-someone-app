@@ -17,4 +17,4 @@ appId: com.charifmahmoudi.invite
 - tapOn: Plans
 - assertVisible: What sounds good?
 - tapOn: Create
-- assertVisible: Create an activity
+- assertVisible: Create a plan
