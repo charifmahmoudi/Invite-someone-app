@@ -215,8 +215,9 @@ The screenshot workflow currently pins a specific verified APK artifact ID. When
 - Internal testing release is committed and available to the configured tester list.
 - The tester opt-in page recognizes the enrolled tester account and exposes **Download test app**.
 - Google Play shows an Install button for the unreviewed test build.
-- The latest physical-device installation attempt reached Play delivery but returned the generic Play Store error **"Something went wrong on our end. Please try again."**
-- Therefore Play visibility/eligibility is working, but physical Play installation is **not yet an accepted release gate**.
+- **The current Play-delivered build now installs successfully on the physical test phone and the application runs on that device.**
+- Play visibility, eligibility, delivery, installation, and launch are therefore working.
+- The remaining release gate is the complete functional acceptance suite on the Play-installed build; installation success alone does not authorize production promotion.
 
 Internal testing can be used before the app is fully configured for public production. Console-only App content/policy declarations and production-access requirements remain separate from the internal-test acceptance gate.
 
@@ -253,7 +254,8 @@ Promotion is intentionally conservative:
 staging CI
   -> hosted Firebase boundary smoke
   -> Play Internal testing publication
-  -> Play-installed acceptance suite on real device
+  -> Play installation + launch on real device [passed]
+  -> Play-installed functional acceptance suite
   -> verify MongoDB identity invariants
   -> re-check exact branch heads
   -> fast-forward validated staging code to main
@@ -263,8 +265,8 @@ staging CI
 
 Required Play-installed acceptance includes:
 
-- install from Google Play;
-- launch;
+- install from Google Play [passed];
+- launch [passed];
 - email/password signup;
 - email verification;
 - returning email/password sign-in;
@@ -281,7 +283,7 @@ Required Play-installed acceptance includes:
 - network-change recovery;
 - uninstall/reinstall or Play update behavior as appropriate.
 
-Only after those pass should `main` and production be changed.
+Only after those remaining checks pass should `main` and production be changed.
 
 ## Rollback principles
 
