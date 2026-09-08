@@ -5,6 +5,7 @@ import {
   ACTIVITY_CATEGORIES,
   type Activity,
   type ActivityCategory,
+  type AppData,
   type Invitation,
   type Profile,
 } from '../../src/types/domain';
@@ -56,7 +57,100 @@ const invitationFromDocument = (document: InvitationDocument): Invitation => {
   return invitation;
 };
 
+const blockedPeerIdsFor = async (userId: string) => {
+  const { userBlocks } = await getCollections();
+  const documents = await userBlocks
+    .find({
+      $or: [{ blockerId: userId }, { blockedId: userId }],
+    })
+    .toArray();
+  return [
+    ...new Set(
+      documents.map((block) => (block.blockerId === userId ? block.blockedId : block.blockerId)),
+    ),
+  ];
+};
+
+const visibleActivityFilter = (
+  userId: string,
+  blockedIds: string[],
+  invitedActivityIds: string[],
+): Filter<ActivityDocument> => ({
+  $and: [
+    { hostId: { $nin: blockedIds } },
+    {
+      $or: [
+        { status: { $ne: 'cancelled' } },
+        { hostId: userId },
+        { attendeeIds: userId },
+      ],
+    },
+    {
+      $or: [
+        { visibility: 'community' },
+        { hostId: userId },
+        { attendeeIds: userId },
+        { _id: { $in: invitedActivityIds } },
+      ],
+    },
+  ],
+});
+
 export const resourceRouter = Router();
+
+resourceRouter.get('/data', async (_request, response) => {
+  const userId = authenticatedUserId(response);
+  const blockedIds = await blockedPeerIdsFor(userId);
+  const { members, activities, invitations, savedActivities } = await getCollections();
+
+  const rawInvitations = await invitations
+    .find({ $or: [{ senderId: userId }, { receiverId: userId }] })
+    .sort({ createdAt: -1 })
+    .toArray();
+  const invitationDocuments = rawInvitations.filter(
+    (invitation) =>
+      !blockedIds.includes(invitation.senderId) && !blockedIds.includes(invitation.receiverId),
+  );
+  const invitedActivityIds = invitationDocuments
+    .filter((invitation) => invitation.receiverId === userId && invitation.status !== 'cancelled')
+    .map((invitation) => invitation.activityId);
+
+  const [memberDocuments, activityDocuments, savedDocuments] = await Promise.all([
+    members.find({ _id: { $nin: blockedIds } }).sort({ 'profile.name': 1 }).toArray(),
+    activities
+      .find(visibleActivityFilter(userId, blockedIds, invitedActivityIds))
+      .sort({ startAt: 1 })
+      .toArray(),
+    savedActivities.find({ userId }).toArray(),
+  ]);
+
+  const visibleInvitations = invitationDocuments.map(invitationFromDocument);
+  const visibleActivityIds = new Set(activityDocuments.map((activity) => activity._id));
+  const data: AppData = {
+    profiles: memberDocuments.map((member) => publicProfile(member, userId)),
+    activities: activityDocuments.map((document) => {
+      const activity = activityFromDocument(document);
+      return {
+        ...activity,
+        invitedIds: [
+          ...new Set(
+            visibleInvitations
+              .filter(
+                (invitation) =>
+                  invitation.activityId === activity.id && invitation.status !== 'cancelled',
+              )
+              .map((invitation) => invitation.receiverId),
+          ),
+        ],
+      };
+    }),
+    invitations: visibleInvitations,
+    savedActivityIds: savedDocuments
+      .map((saved) => saved.activityId)
+      .filter((activityId) => visibleActivityIds.has(activityId)),
+  };
+  response.json(data);
+});
 
 resourceRouter.get('/me', async (_request, response) => {
   const userId = authenticatedUserId(response);
@@ -71,22 +165,17 @@ resourceRouter.get('/me', async (_request, response) => {
 
 resourceRouter.get('/activities', async (request, response) => {
   const userId = authenticatedUserId(response);
+  const blockedIds = await blockedPeerIdsFor(userId);
   const limit = pageLimit(request.query.limit);
   const cursor = decodeCursor<{ startAt: string; id: string }>(request.query.cursor);
   const { activities, invitations } = await getCollections();
 
   const invitedActivityIds = await invitations.distinct('activityId', {
     receiverId: userId,
+    senderId: { $nin: blockedIds },
     status: { $ne: 'cancelled' },
   });
-  const visibility: Filter<ActivityDocument> = {
-    $or: [
-      { visibility: 'community' },
-      { hostId: userId },
-      { attendeeIds: userId },
-      { _id: { $in: invitedActivityIds } },
-    ],
-  };
+  const visibility = visibleActivityFilter(userId, blockedIds, invitedActivityIds);
   const filter: Filter<ActivityDocument> = cursor
     ? {
         $and: [
@@ -112,6 +201,8 @@ resourceRouter.get('/activities', async (request, response) => {
     ? await invitations
         .find({
           activityId: { $in: activityIds },
+          senderId: { $nin: blockedIds },
+          receiverId: { $nin: blockedIds },
           $or: [{ senderId: userId }, { receiverId: userId }],
         })
         .toArray()
@@ -145,6 +236,7 @@ resourceRouter.get('/activities', async (request, response) => {
 
 resourceRouter.get('/people', async (request, response) => {
   const userId = authenticatedUserId(response);
+  const blockedIds = await blockedPeerIdsFor(userId);
   const limit = pageLimit(request.query.limit);
   const cursor = decodeCursor<{ name: string; id: string }>(request.query.cursor);
   const { members } = await getCollections();
@@ -154,7 +246,10 @@ resourceRouter.get('/people', async (request, response) => {
     return;
   }
 
-  const clauses: Filter<MemberDocument>[] = [{ _id: { $ne: userId } }];
+  const clauses: Filter<MemberDocument>[] = [
+    { _id: { $ne: userId } },
+    { _id: { $nin: blockedIds } },
+  ];
   const query = typeof request.query.query === 'string' ? request.query.query.trim() : '';
   if (query) {
     const search = new RegExp(escapeRegularExpression(query), 'i');
@@ -211,8 +306,64 @@ resourceRouter.get('/people', async (request, response) => {
   response.json(page);
 });
 
+// Compatibility non-paginated profile search, now with the same block semantics.
+resourceRouter.get('/profiles', async (request, response) => {
+  const userId = authenticatedUserId(response);
+  const blockedIds = await blockedPeerIdsFor(userId);
+  const { members } = await getCollections();
+  const current = await members.findOne({ _id: userId });
+  if (!current) {
+    response.status(404).json({ message: 'Your profile could not be found.' });
+    return;
+  }
+  const filter: Filter<MemberDocument> = {
+    _id: { $nin: [userId, ...blockedIds] },
+  };
+  const query = typeof request.query.query === 'string' ? request.query.query.trim() : '';
+  if (query) {
+    const search = new RegExp(escapeRegularExpression(query), 'i');
+    filter.$or = [
+      { 'profile.name': search },
+      { 'profile.handle': search },
+      { 'profile.headline': search },
+      { 'profile.bio': search },
+      { 'profile.city': search },
+      { 'profile.approximateLocation.area': search },
+    ];
+  }
+  const interests =
+    typeof request.query.interests === 'string'
+      ? request.query.interests
+          .split(',')
+          .filter((value): value is ActivityCategory =>
+            ACTIVITY_CATEGORIES.includes(value as ActivityCategory),
+          )
+      : [];
+  if (interests.length) filter['profile.interests'] = { $in: interests };
+  if (typeof request.query.availability === 'string' && request.query.availability) {
+    filter['profile.availability'] = request.query.availability;
+  }
+  if (typeof request.query.connectionGoal === 'string' && request.query.connectionGoal) {
+    filter['profile.connectionGoals'] = request.query.connectionGoal;
+  }
+  if (request.query.verifiedOnly === 'true') filter['profile.isVerified'] = true;
+
+  const maxDistanceKm = Number(request.query.maxDistanceKm);
+  if (Number.isFinite(maxDistanceKm) && maxDistanceKm > 0 && current.mapPoint) {
+    filter.mapPoint = {
+      $near: {
+        $geometry: current.mapPoint,
+        $maxDistance: Math.min(maxDistanceKm, 100) * 1000,
+      },
+    };
+  }
+  const results = await members.find(filter).limit(100).toArray();
+  response.json(results.map((member) => publicProfile(member, userId)));
+});
+
 resourceRouter.get('/invitations', async (request, response) => {
   const userId = authenticatedUserId(response);
+  const blockedIds = await blockedPeerIdsFor(userId);
   const limit = pageLimit(request.query.limit);
   const cursor = decodeCursor<{ createdAt: string; id: string }>(request.query.cursor);
   const direction = request.query.direction;
@@ -222,19 +373,20 @@ resourceRouter.get('/invitations', async (request, response) => {
       : direction === 'received'
         ? { receiverId: userId }
         : { $or: [{ senderId: userId }, { receiverId: userId }] };
-  const filter: Filter<InvitationDocument> = cursor
-    ? {
-        $and: [
-          ownership,
-          {
-            $or: [
-              { createdAt: { $lt: cursor.createdAt } },
-              { createdAt: cursor.createdAt, _id: { $lt: cursor.id } },
-            ],
-          },
-        ],
-      }
-    : ownership;
+  const clauses: Filter<InvitationDocument>[] = [
+    ownership,
+    { senderId: { $nin: blockedIds } },
+    { receiverId: { $nin: blockedIds } },
+  ];
+  if (cursor) {
+    clauses.push({
+      $or: [
+        { createdAt: { $lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, _id: { $lt: cursor.id } },
+      ],
+    });
+  }
+  const filter: Filter<InvitationDocument> = { $and: clauses };
 
   const { invitations } = await getCollections();
   const documents = await invitations
