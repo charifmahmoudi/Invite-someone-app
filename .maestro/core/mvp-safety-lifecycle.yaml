@@ -1,0 +1,93 @@
+appId: com.charifmahmoudi.invite
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- tapOn: Explore the demo
+- extendedWaitUntil:
+    visible: What sounds good?
+    timeout: 30000
+
+# Join and leave a community plan to cover attendee lifecycle from the UI.
+- scrollUntilVisible:
+    element:
+      text: Sunday sketchbook club
+    direction: DOWN
+    timeout: 20000
+- tapOn: Sunday sketchbook club
+- extendedWaitUntil:
+    visible:
+      id: join-plan
+    timeout: 20000
+- tapOn:
+    id: join-plan
+- assertVisible: You’re in
+- tapOn: OK
+- extendedWaitUntil:
+    visible:
+      id: leave-plan
+    timeout: 10000
+- tapOn:
+    id: leave-plan
+- assertVisible: Leave this plan?
+- tapOn: Leave plan
+- extendedWaitUntil:
+    visible:
+      id: join-plan
+    timeout: 10000
+
+# Report a profile, receive a reference, then block the profile.
+- back
+- tapOn: People
+- extendedWaitUntil:
+    visible: People worth inviting
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: Maya Chen
+    direction: DOWN
+    timeout: 20000
+- tapOn: Maya Chen
+- assertVisible:
+    id: person-details-screen
+- scrollUntilVisible:
+    element:
+      id: report-profile
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: report-profile
+- assertVisible:
+    id: report-screen
+- tapOn: Other
+- scrollUntilVisible:
+    element:
+      id: submit-report
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: submit-report
+- extendedWaitUntil:
+    visible:
+      id: report-success
+    timeout: 10000
+- assertVisible: Report reference
+- tapOn: Done
+- extendedWaitUntil:
+    visible:
+      id: person-details-screen
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: block-profile
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: block-profile
+- assertVisible: Block Maya?
+- tapOn: Block
+- extendedWaitUntil:
+    visible: People worth inviting
+    timeout: 10000
+- assertNotVisible: Maya Chen
