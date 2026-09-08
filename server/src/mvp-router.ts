@@ -361,6 +361,9 @@ savedActivitySafetyRouter.put('/:activityId', async (request, response, next) =>
     next();
     return;
   }
+  if (isCancelled(activity)) {
+    fail(409, 'A cancelled plan cannot be saved.');
+  }
   if (await hasBlockBetween(userId, activity.hostId)) {
     fail(403, 'You cannot save this activity.');
   }
