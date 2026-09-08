@@ -65,7 +65,9 @@ Release: Invite Internal 15
 Android versionCode: 5
 ```
 
-Google Play tester enrollment, release visibility, and physical-device installation are now working. The Play-delivered build installs and runs on the test phone. The remaining release gate is the complete functional acceptance suite on that Play-installed build; production promotion remains blocked until those checks pass.
+Google Play tester enrollment, release visibility, physical-device installation, and launch are working. The Play-delivered build installs and runs on the test phone.
+
+The release owner has explicitly **waived the full Play-installed functional acceptance suite for this release candidate**. That suite is therefore **skipped, not passed**; its unexecuted checks must not be represented as verified. See [Current status](./docs/CURRENT_STATUS.md) for the exact waived checks and remaining production-readiness steps.
 
 The [Play Store Screenshots workflow](./.github/workflows/play-store-screenshots.yml) boots a hardware-accelerated Android emulator, installs the verified staging APK, captures real Invite screens, publishes them to the Play listing, and verifies the listing contains at least two phone screenshots.
 
@@ -182,9 +184,9 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Project status
 
-This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured, `versionCode 5` is visible to enrolled testers, and the Play-delivered build now installs/runs on the test phone. Production `main`, the production Render service, and production MongoDB remain unchanged until the remaining Play-installed functional acceptance suite passes.
+This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured, `versionCode 5` is visible to enrolled testers, and the Play-delivered build installs/runs on the test phone. The full Play-installed functional acceptance suite has been explicitly waived for this release candidate and remains unverified rather than passed. Production `main`, the production Render service, and production MongoDB remain unchanged pending explicit production promotion/cutover actions.
 
-See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for the exact completed work and remaining release gates.
+See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for the exact completed work, waiver, and remaining release gates.
 
 Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store production credentials/promotion remain later work.
 
