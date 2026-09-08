@@ -23,11 +23,23 @@ export const CONNECTION_GOALS = [
   'Learn together',
 ] as const;
 
+export const REPORT_REASONS = [
+  'Harassment or threatening behavior',
+  'Spam or scam',
+  'Fake or misleading profile',
+  'Unsafe activity',
+  'Inappropriate content',
+  'Other',
+] as const;
+
 export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 export type ActivityVisibility = 'community' | 'invite-only';
 export type ActivityVibe = 'Easygoing' | 'Active' | 'Focused';
+export type ActivityStatus = 'active' | 'cancelled';
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
 export type SessionMode = 'demo' | 'local' | 'mongodb' | 'supabase';
+export type ReportTargetType = 'profile' | 'activity';
+export type ReportReason = (typeof REPORT_REASONS)[number];
 
 export interface ApproximateLocation {
   /** A broad public label such as a neighbourhood; never a street address. */
@@ -72,6 +84,9 @@ export interface Activity {
   invitedIds: string[];
   visibility: ActivityVisibility;
   vibe: ActivityVibe;
+  /** Older stored activities omit this field and are treated as active. */
+  status?: ActivityStatus;
+  cancelledAt?: string;
   createdAt: string;
 }
 
@@ -147,4 +162,17 @@ export interface InvitationDraft {
   activityId: string;
   receiverIds: string[];
   message: string;
+}
+
+export interface SafetyReportDraft {
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  details?: string;
+}
+
+export interface SafetyReportReceipt {
+  id: string;
+  status: 'open';
+  createdAt: string;
 }
