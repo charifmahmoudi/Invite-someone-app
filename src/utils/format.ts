@@ -25,6 +25,14 @@ export const relativeTime = (isoDate: string) => {
   return `${days}d ago`;
 };
 
+/**
+ * Reliability is only meaningful after repeated attendance. New members should
+ * never appear to have a proven 100% track record merely because the seed value
+ * is 100.
+ */
+export const reliabilityLabel = (completedActivities: number, reliabilityScore: number) =>
+  completedActivities >= 3 ? `${reliabilityScore}% reliable` : 'New member';
+
 export const initialsFromName = (name: string) =>
   name
     .trim()
