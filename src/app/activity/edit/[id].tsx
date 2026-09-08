@@ -1,6 +1,6 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui/app-icon';
@@ -16,6 +16,7 @@ import { activityDraftSchema, firstValidationMessage } from '@/domain/validation
 import { useActivity, useApp } from '@/state/app-context';
 import {
   ACTIVITY_CATEGORIES,
+  type Activity,
   type ActivityCategory,
   type ActivityVibe,
   type ActivityVisibility,
@@ -26,33 +27,7 @@ export default function EditActivityScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const activity = useActivity(id);
-  const { state, updateActivity } = useApp();
-  const [loadedActivityId, setLoadedActivityId] = useState<string>();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ActivityCategory>('Coffee');
-  const [startAt, setStartAt] = useState(() => new Date());
-  const [location, setLocation] = useState('');
-  const [city, setCity] = useState('');
-  const [capacity, setCapacity] = useState(2);
-  const [visibility, setVisibility] = useState<ActivityVisibility>('community');
-  const [vibe, setVibe] = useState<ActivityVibe>('Easygoing');
-  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
-  const [formError, setFormError] = useState<string>();
-
-  useEffect(() => {
-    if (!activity || activity.id === loadedActivityId) return;
-    setLoadedActivityId(activity.id);
-    setTitle(activity.title);
-    setDescription(activity.description);
-    setCategory(activity.category);
-    setStartAt(new Date(activity.startAt));
-    setLocation(activity.location);
-    setCity(activity.city);
-    setCapacity(activity.capacity);
-    setVisibility(activity.visibility);
-    setVibe(activity.vibe);
-  }, [activity, loadedActivityId]);
+  const { state } = useApp();
 
   if (!state.hydrated) return null;
   if (!state.session) return <Redirect href="/(auth)/welcome" />;
@@ -88,8 +63,24 @@ export default function EditActivityScreen() {
       </ScrollScreen>
     );
   }
-  if (loadedActivityId !== activity.id) return null;
 
+  return <EditActivityForm key={activity.id} activity={activity} />;
+}
+
+function EditActivityForm({ activity }: { activity: Activity }) {
+  const router = useRouter();
+  const { state, updateActivity } = useApp();
+  const [title, setTitle] = useState(activity.title);
+  const [description, setDescription] = useState(activity.description);
+  const [category, setCategory] = useState<ActivityCategory>(activity.category);
+  const [startAt, setStartAt] = useState(() => new Date(activity.startAt));
+  const [location, setLocation] = useState(activity.location);
+  const [city, setCity] = useState(activity.city);
+  const [capacity, setCapacity] = useState(activity.capacity);
+  const [visibility, setVisibility] = useState<ActivityVisibility>(activity.visibility);
+  const [vibe, setVibe] = useState<ActivityVibe>(activity.vibe);
+  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
+  const [formError, setFormError] = useState<string>();
   const minimumCapacity = Math.max(2, activity.attendeeIds.length);
 
   const changeDate = (_event: DateTimePickerEvent, value?: Date) => {
