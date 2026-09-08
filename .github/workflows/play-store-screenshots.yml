@@ -66,7 +66,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -euo pipefail
+            bash -euo pipefail <<'BASH'
             PACKAGE='com.charifmahmoudi.invite'
             OUT="$GITHUB_WORKSPACE/play-screenshots"
             mkdir -p "$OUT"
@@ -154,6 +154,7 @@ jobs:
                     raise SystemExit(f'Screenshot looks suspiciously small ({size} bytes): {path}')
                 print(f'{os.path.basename(path)}: {w}x{h}, {size} bytes')
             PY
+            BASH
 
       - name: Upload screenshot evidence
         uses: actions/upload-artifact@v4
