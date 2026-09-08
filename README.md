@@ -1,22 +1,39 @@
 # Invite
 
-Invite is a cross-platform social activity app designed to make the first move easier. Members create a profile, discover people through shared interests, make a small plan, and send a thoughtful invitation. Repeated low-pressure interactions can grow into genuine local communities.
+Invite is a cross-platform social app designed to make the first move easier. Members create a profile, discover people through shared interests, make a small plan, and send a thoughtful invitation. Repeated low-pressure interactions can grow into genuine local communities.
 
-The same TypeScript codebase runs on iPhone, Android, and the web using Expo SDK 57 and React Native.
+The same TypeScript codebase runs on Android, iPhone, and web using Expo SDK 57 and React Native.
+
+## Current project state
+
+Invite is in **MVP hardening**.
+
+- Firebase migration source is already on `main`.
+- Production infrastructure has **not** been cut over; Render auto-deploy is disabled.
+- Active hardening work is isolated on `impl/mvp-hardening`.
+- Google Play Internal testing versionCode **5** installs and launches on the physical test phone.
+- The earlier full Play-installed functional suite was explicitly waived, so it remains **not executed / not passed**.
+- The hardening branch adds explicit managed-auth states, stronger login recovery, a new Android/Firebase quality gate, clearer trust semantics, an in-app Help & Safety center, and rewritten MVP/user/support documentation.
+
+See [Current status](./docs/CURRENT_STATUS.md) and [MVP definition](./docs/MVP.md) before making release or production decisions.
 
 ## Product highlights
 
-- Guided account creation with interests, availability, and connection goals
-- Personalized activity feed with category filters and saved plans
-- Photo-backed people discovery with biography, interest, availability, goal, trust, and distance filters
-- Privacy-first approximate-area map with no exact home pins or location permission
-- Complete host flow: create an activity, set capacity and visibility, and invite recommended people
-- Received and sent invitation inboxes with accept, decline, and cancel states
-- Community activities that members can join, with transactional capacity protection in production
-- Profile editing, attendance history, reliability signals, and hosted plans
-- First-meeting safety guidance embedded in invitation and activity flows
-- Local demo/internal-auth compatibility plus Firebase Authentication managed identity
-- Server-side Express/MongoDB API for authorization and product data
+- Firebase email/password account creation, verification, password reset, and managed sessions
+- Native Android Google Sign-In exchanged into Firebase
+- Guided profile onboarding with interests, availability, and connection goals
+- Personalized plan feed with category filters and saved plans
+- People discovery with biography, interest, availability, goal, verification, and approximate-distance filters
+- Privacy-first approximate-area map with no exact home pins or live-location permission
+- Host flow for creating a plan, setting capacity/visibility, and inviting recommended people
+- Received/sent invitation inboxes with accept, decline, and cancel states
+- Community plans with server-side transactional capacity protection
+- Profile editing, hosted plans, and evidence-aware trust presentation
+- First-meeting safety guidance plus an in-app Help & Safety center on the hardening branch
+- Express/MongoDB API for authorization and Invite domain data
+- Local demo mode for product review without a backend account
+
+Public MVP still requires host plan edit/cancel, attendee leave, block/report controls, account deletion, stronger server integration coverage, and final design/workflow polish. These are tracked in [MVP.md](./docs/MVP.md) and [USER_STORIES.md](./docs/USER_STORIES.md).
 
 ## Quick start
 
@@ -52,11 +69,7 @@ The iOS command requires macOS. EAS profiles for cloud development, preview, and
 
 ## Installable builds and Google Play
 
-Changes to `main` continue to use the compatibility mobile-preview path. Firebase migration/release testing happens on `impl/firebase-auth`.
-
-The [Validate Firebase Android workflow](./.github/workflows/validate-firebase-android.yml) validates the isolated Firebase API, generates the Android native project, builds a staging APK, verifies its certificate, builds a protected upload-key-signed AAB, authenticates to Google Cloud through Workload Identity Federation, and publishes the bundle to Google Play Internal testing.
-
-Current Play staging state:
+The current Google Play test release is:
 
 ```text
 Package: com.charifmahmoudi.invite
@@ -65,71 +78,89 @@ Release: Invite Internal 15
 Android versionCode: 5
 ```
 
-Google Play tester enrollment, release visibility, physical-device installation, and launch are working. The Play-delivered build installs and runs on the test phone.
+Google Play tester enrollment, release visibility, physical-device installation, and launch are working.
 
-The release owner has explicitly **waived the full Play-installed functional acceptance suite for this release candidate**. That suite is therefore **skipped, not passed**; its unexecuted checks must not be represented as verified. See [Current status](./docs/CURRENT_STATUS.md) for the exact waived checks and remaining production-readiness steps.
+The original Firebase Android release workflow remains [Validate Firebase Android](./.github/workflows/validate-firebase-android.yml). The active hardening branch also adds [MVP Quality Gate](./.github/workflows/mvp-quality.yml), which is designed to protect `main` and `impl/mvp-hardening` with:
 
-The [Play Store Screenshots workflow](./.github/workflows/play-store-screenshots.yml) boots a hardware-accelerated Android emulator, installs the verified staging APK, captures real Invite screens, publishes them to the Play listing, and verifies the listing contains at least two phone screenshots.
+- a genuine disposable Firebase identity boundary check against the isolated staging API;
+- proof that an unmapped identity gets `INVITE_PROFILE_REQUIRED`;
+- proof that an unverified identity gets `VERIFIED_EMAIL_REQUIRED` when provisioning;
+- a Firebase-enabled Android release APK build;
+- API 35 emulator managed-auth invalid-login smoke;
+- clean-state core/demo navigation smoke;
+- retained Maestro evidence.
 
-See [Current status](./docs/CURRENT_STATUS.md), [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md), and [Google Play testing](./docs/GOOGLE_PLAY_TESTING.md) before changing signing, versionCode, testers, or production infrastructure.
+The MVP quality workflow does **not** publish an AAB and does not deploy production.
+
+The earlier Play screenshot workflow successfully published two phone screenshots, but later review of its retained evidence found a visible Android system `Quickstep isn't responding` dialog over both images. The hardening branch changes the capture script to reject captures while an ANR/error dialog remains visible. Clean listing screenshots must be regenerated before public release.
 
 ## Try the complete demo
 
-No backend is required for product review. On the welcome screen, choose **Explore the demo**. Demo changes are persisted on the device with AsyncStorage.
+No backend is required for product review. On the welcome screen, choose **Explore the demo**. Demo changes are persisted locally.
 
-You can also use the local compatibility sign-in screen:
+The local compatibility sign-in path also supports the fictional review account in preview mode:
 
 - Email: `demo@invite.app`
 - Password: any non-empty value in local preview mode
 
-## Production architecture
+Demo/local preview behavior must never be presented as production authentication.
+
+## Architecture
 
 Invite deliberately separates identity from product data:
 
 ```text
 Expo / React Native
-   |-- Firebase Authentication: email/password + Google identity/session
+   |-- Firebase Authentication
+   |     email/password, verification, reset, Google identity/session
    |
-   `-- Invite Express API: authorization + business rules
+   `-- Invite Express API
+          authorization + business rules
               |
-              `-- MongoDB Atlas: Invite profiles/domain data
+              `-- MongoDB Atlas
+                    Invite profiles, plans, invitations, identity mappings
 ```
 
-Firebase is an identity provider only. MongoDB remains authoritative for profiles, activities, invitations, saved plans and identity mappings.
+Firebase is an identity provider only. MongoDB remains authoritative for Invite domain data.
 
-The Express API maps each Firebase UID to an internal Invite user ID, so authentication-provider IDs do not leak throughout the domain model.
+The API maps each Firebase UID to a stable internal Invite user ID, so provider identifiers do not become domain identifiers.
 
-Current deployment separation:
+Key identity invariants:
+
+- a verified primary email is required before Firebase profile provisioning;
+- email equality alone never links identities;
+- an existing-email collision returns `ACCOUNT_LINK_REQUIRED`;
+- a temporary backend failure must not be interpreted as a missing profile;
+- API authorization remains authoritative even when the UI hides/disables an action.
+
+## Deployment separation
 
 ```text
-Firebase staging
-  impl/firebase-auth
-  -> Render invite-someone-api-firebase-e2e
-  -> MongoDB invite_firebase_e2e
-  -> Google Play Internal testing
-
-Production (not cut over)
+Source
   main
-  -> Render invite-someone-api
-  -> MongoDB invite_someone
-  -> compatibility/internal auth until explicit production cutover
+    Firebase migration source promoted
+
+  impl/mvp-hardening
+    active MVP hardening work
+
+Firebase staging
+  Render: invite-someone-api-firebase-e2e
+  MongoDB: invite_firebase_e2e
+  Google Play: Internal testing
+
+Production
+  Render: invite-someone-api
+  MongoDB: invite_someone
+  operational Firebase cutover: not performed yet
 ```
 
-Render auto-deploy is disabled for staging and production. Git branch HEAD and live Render deployment revision must be checked independently.
+Render auto-deploy is disabled for staging and production. Git branch HEAD and the live Render deployment revision must always be checked independently.
 
-See [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md) for the complete environment, CI/CD, signing, secret-boundary, promotion and rollback model.
-
-## Connect MongoDB and the API
-
-Invite uses the Express/MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the database.
-
-For compatibility/internal auth, see [MongoDB backend setup](./docs/MONGODB_BACKEND.md). For the managed-auth configuration, set the API to `AUTH_MODE=firebase` and follow [FIREBASE_AUTH_SETUP.md](./docs/FIREBASE_AUTH_SETUP.md).
-
-The API protects every mutation with server authorization, removes private auth/email fields from public profile responses, uses coarse geospatial discovery, and performs invitation acceptance plus attendance in a MongoDB transaction.
+See [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md).
 
 ## Managed-auth client variables
 
-A Firebase-enabled build uses public Firebase Web configuration:
+A Firebase-enabled build uses public Firebase client configuration:
 
 ```bash
 EXPO_PUBLIC_API_URL=https://your-invite-api.example
@@ -141,54 +172,68 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:web:example
 ```
 
-Android Google sign-in is configured natively with `google-services.json`, a Web OAuth client for ID-token issuance, and a Google OAuth **Android** client registered for `com.charifmahmoudi.invite` plus the certificate SHA-1 used to sign the installed build. Android does not require an OAuth client secret or `EXPO_PUBLIC_GOOGLE_*` variables.
+Android Google Sign-In is configured natively with `google-services.json`, a Web OAuth client for ID-token issuance, and an Android OAuth client registered for `com.charifmahmoudi.invite` plus the SHA-1 certificate used to sign the installed build.
 
-Every Android signing channel can have a different SHA-1. The direct staging APK, Play upload key, and Play App Signing certificate are separate identities. A Google Play-installed build uses the **Play App Signing** certificate for Google OAuth matching.
+The direct test APK, Play upload key, and Play App Signing certificate are separate signing identities. A Google Play-installed build uses the **Play App Signing** certificate for Google OAuth matching.
 
-Never put MongoDB credentials, OAuth client secrets, Firebase service-account JSON, signing private keys, or private keys in `EXPO_PUBLIC_*` variables.
+Never put MongoDB credentials, OAuth client secrets, Firebase service-account JSON, signing private keys, keystore passwords, or private keys in `EXPO_PUBLIC_*` variables.
 
 ## Commands
 
-| Command                  | Purpose                                           |
-| ------------------------ | ------------------------------------------------- |
-| `npm start`              | Start Expo development server                     |
-| `npm run android`        | Open the Android target                           |
-| `npm run ios`            | Open the iOS target                               |
-| `npm run web`            | Open the web target                               |
-| `npm run typecheck`      | Run strict TypeScript checks                      |
-| `npm run lint`           | Run Expo's ESLint rules and React Compiler checks |
-| `npm test`               | Run the Jest user-story suite                     |
-| `npm run test:ci`        | Run tests with coverage in CI mode                |
-| `npm run export:web`     | Produce a static web export                       |
-| `npm run server:dev`     | Start the MongoDB API with file watching          |
-| `npm run server:start`   | Start the MongoDB API                             |
-| `npm run server:indexes` | Create/verify MongoDB indexes                     |
-| `npm run server:seed`    | Seed an empty database with fictional demo data   |
-| `npm run format`         | Format source and documentation                   |
+| Command | Purpose |
+| --- | --- |
+| `npm start` | Start Expo development server |
+| `npm run android` | Open the Android target |
+| `npm run ios` | Open the iOS target |
+| `npm run web` | Open the web target |
+| `npm run typecheck` | Run strict client/server TypeScript checks |
+| `npm run lint` | Run Expo ESLint and React rules |
+| `npm test` | Run the Jest user-story/domain suite |
+| `npm run test:ci` | Run tests with coverage in CI mode |
+| `npm run export:web` | Produce a static web export |
+| `npm run server:dev` | Start the MongoDB API with file watching |
+| `npm run server:start` | Start the MongoDB API |
+| `npm run server:indexes` | Create/verify MongoDB indexes |
+| `npm run server:seed` | Seed an empty database with fictional demo data |
+| `npm run format` | Format source and documentation |
 
 ## Documentation
 
-- [Current migration/release status](./docs/CURRENT_STATUS.md)
-- [Deployment architecture and environment inventory](./docs/DEPLOYMENT_ARCHITECTURE.md)
+### Product and MVP
+
+- [MVP definition](./docs/MVP.md)
 - [Product brief](./docs/PRODUCT.md)
 - [User stories and acceptance criteria](./docs/USER_STORIES.md)
+- [Current status](./docs/CURRENT_STATUS.md)
+
+### User help
+
+- [User guide](./docs/USER_GUIDE.md)
+- [Account and login help](./docs/ACCOUNT_AND_LOGIN_HELP.md)
+- [Help and FAQ](./docs/HELP_AND_FAQ.md)
+- [Safety guide](./docs/SAFETY_GUIDE.md)
+
+### Operations / engineering
+
+- [Support runbook](./docs/SUPPORT_RUNBOOK.md)
 - [Application architecture](./docs/ARCHITECTURE.md)
+- [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md)
 - [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md)
-- [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md)
+- [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md)
 - [Google Play testing/signing/listing guide](./docs/GOOGLE_PLAY_TESTING.md)
 - [MongoDB backend setup](./docs/MONGODB_BACKEND.md)
-- [Data model and security rules](./docs/DATA_MODEL.md)
+- [Data model and authorization](./docs/DATA_MODEL.md)
 - [Testing strategy](./docs/TESTING.md)
-- [Safety and privacy](./docs/SAFETY_AND_PRIVACY.md)
+- [Safety and privacy engineering design](./docs/SAFETY_AND_PRIVACY.md)
 - [Contributing](./CONTRIBUTING.md)
 
-## Project status
+## Production policy
 
-This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured, `versionCode 5` is visible to enrolled testers, and the Play-delivered build installs/runs on the test phone. The full Play-installed functional acceptance suite has been explicitly waived for this release candidate and remains unverified rather than passed. Production `main`, the production Render service, and production MongoDB remain unchanged pending explicit production promotion/cutover actions.
+Source promotion is not production deployment. The production Render API and database must not be changed merely because a branch is merged.
 
-See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for the exact completed work, waiver, and remaining release gates.
+Before production cutover, recheck the exact candidate SHA, live Render revision, client/server compatibility, database state, rollback plan, and the release evidence required for the candidate.
 
-Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store production credentials/promotion remain later work.
+Any acceptance suite that was not executed must remain documented as **not executed / waived**, never as passed.
 
 ## License
 
