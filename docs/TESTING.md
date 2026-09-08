@@ -2,24 +2,24 @@
 
 _Last verified: 2026-09-08._
 
-This document defines **what each test layer must prove**. For current progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For exact operator steps, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md). For environment and deployment boundaries, use [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
+This document defines what each test layer must prove. For current implementation/release state, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For public-MVP requirements, see [MVP.md](./MVP.md).
 
 ## Test layers
 
 ```text
-Play-delivered physical acceptance      final release gate
-Native/emulator preflight               fast Android behavior
-Hosted Firebase/API boundary smoke      real provider trust boundary
-MongoDB/API integration                 authorization + identity invariants
-Domain/unit/component tests             business rules
-TypeScript/lint/build gates              fast static/packaging checks
+Play-delivered physical acceptance      release/device evidence
+Android managed-auth E2E                repeatable native journey coverage
+Hosted Firebase/API boundary            real provider trust boundary
+MongoDB/API integration                 authorization + transaction invariants
+Domain/unit/component tests             business rules and UI state
+TypeScript/lint/build gates              static/packaging correctness
 ```
 
-No single layer proves native behavior, provider configuration, Play signing, authorization and MongoDB correctness at once.
+No single layer proves native behavior, provider configuration, Play signing, authorization, and MongoDB correctness at once.
 
-## Standard CI gates
+## Standard CI
 
-The `CI` workflow runs on `main`, `impl/**`, pull requests and manual dispatch:
+`.github/workflows/ci.yml` runs on `main`, `impl/**`, pull requests, and manual dispatch:
 
 ```bash
 npm ci
@@ -29,233 +29,272 @@ npm run test:ci
 npm run export:web -- --output-dir dist
 ```
 
-It proves TypeScript correctness, lint/React Compiler rules, domain/user-story tests and production web exportability.
+It proves:
 
-## Firebase staging workflows
+- client/server TypeScript correctness;
+- ESLint/React rules;
+- current Jest domain/user-story tests;
+- production web exportability.
 
-### Firebase Hosted Auth Smoke
+It does **not** currently prove server authorization, Firebase hosted behavior, or Android runtime behavior by itself.
 
-Creates a disposable real Firebase password user, obtains a genuine Firebase ID token, proves the isolated Express API accepts it, proves an unverified user cannot provision MongoDB state, and removes the test user.
+## MVP Quality Gate
 
-This validates the real Firebase -> Express trust boundary without an Invite auth bypass.
+The hardening branch adds `.github/workflows/mvp-quality.yml` for `main`, `impl/mvp-hardening`, PRs targeting `main`, and manual dispatch.
 
-### Validate Firebase Android
+### Firebase -> API boundary job
 
-This is both a native validation workflow and the current Internal testing release workflow. It:
+Uses a disposable genuine Firebase password identity and the isolated Firebase staging API.
 
-- checks the isolated staging API;
-- runs Expo Android prebuild;
-- verifies generated Firebase configuration;
-- builds the Firebase staging APK;
-- verifies its embedded JS bundle and staging signing certificate;
-- builds a protected upload-key-signed AAB when signing secrets are present;
-- rejects debug-signed AABs;
-- authenticates to Google Cloud through Workload Identity Federation;
-- uploads/releases the AAB to Google Play Internal testing;
-- validates and commits the Play edit.
+It currently proves:
 
-Current Internal testing version: `versionCode 5`.
+- staging `/health` responds;
+- the token is accepted as a genuine Firebase identity;
+- an unmapped Firebase identity gets `403 INVITE_PROFILE_REQUIRED` from `/v1/me`;
+- an unverified Firebase identity gets `400 VERIFIED_EMAIL_REQUIRED` from provisioning;
+- the disposable Firebase account is deleted after the run.
 
-### Play Store Screenshots
+This test intentionally uses no Invite authentication bypass.
 
-This workflow exists to produce truthful Play listing evidence from the real staging app. It:
+### Android managed-auth + core-navigation job
 
-- downloads a verified staging APK;
-- enables KVM on the GitHub Linux runner;
+The job:
+
+- checks out the exact branch SHA;
+- prebuilds a Firebase-enabled Android project;
+- builds a release APK;
 - boots an API 35 Pixel 6 emulator;
-- installs and launches Invite;
-- handles non-Invite Android system ANR dialogs without ignoring Invite ANRs;
-- captures real welcome/discovery screenshots;
-- uploads the screenshots as CI evidence;
-- publishes them to Google Play;
-- verifies the Play listing contains at least two phone screenshots.
+- runs a managed-auth invalid-credential flow;
+- resets app state;
+- runs clean-state demo/core navigation;
+- retains Maestro evidence.
 
-Latest verified successful run: `34176724947`.
+The runner prefers KVM acceleration when `/dev/kvm` exists and falls back to software acceleration rather than failing before emulator startup solely because a particular GitHub runner does not expose KVM.
 
-The screenshot workflow proves renderability and listing assets. It does **not** prove the Play App Signing build can install or authenticate on a physical tester device because the emulator installs the staging APK directly.
+Current Maestro flows:
 
-## Domain and component coverage
+```text
+.maestro/auth/firebase-invalid-sign-in.yaml
+.maestro/core/demo-navigation.yaml
+```
 
-Fast tests cover registration/profile/activity validation, matching and discovery logic, reducer behavior, invitation state transitions, capacity rules and saved activities.
+Current coverage is deliberately a smoke layer, not yet the complete managed-auth E2E suite.
 
-These tests do not replace server authorization or hosted Firebase testing.
+## Managed-auth state coverage
 
-## API integration requirements
+The hardening client distinguishes:
 
-The MongoDB-backed API suite should cover:
+```text
+loading
+signed-out
+unverified
+profile-required
+ready
+account-link-required
+session-error
+backend-unavailable
+```
+
+High-value regression tests should prove:
+
+- `INVITE_PROFILE_REQUIRED` alone routes to profile onboarding;
+- generic network/server errors do not route to onboarding;
+- `ACCOUNT_LINK_REQUIRED` is blocking and never auto-links;
+- rejected/expired API sessions have retry/sign-out recovery;
+- Firebase mode cannot fall back to an old Invite-issued compatibility token;
+- restarting a ready account resolves the same Invite member;
+- sign-out clears Invite/Firebase/native-Google session state as appropriate.
+
+## Domain tests
+
+Fast Jest tests currently cover:
+
+- registration/profile/plan validation;
+- matching/recommendation logic;
+- people discovery/filter behavior;
+- reducer transitions for plan creation;
+- invitation send/accept/decline;
+- community join de-duplication;
+- saved-plan state.
+
+Coverage remains too concentrated in `src/domain`; public-MVP work should add component/auth-state tests and server integration tests.
+
+## Required server integration suite
+
+Before public MVP, add automated tests for at least:
 
 - protected endpoints reject unauthenticated requests;
-- malformed, expired, wrong-audience, wrong-issuer and unknown-key Firebase tokens fail;
-- a valid Firebase UID can resolve only its mapped Invite user;
-- an unmapped Firebase identity receives `INVITE_PROFILE_REQUIRED` where appropriate;
-- provisioning requires a verified email;
+- malformed/expired/wrong-audience/wrong-issuer Firebase tokens fail;
+- a valid Firebase UID resolves only its mapped Invite user;
+- unmapped identity behavior is `INVITE_PROFILE_REQUIRED` where appropriate;
+- verified email is required for provisioning;
 - matching email alone cannot claim an existing Invite account;
-- member/host/receiver/sender permissions are enforced;
+- duplicate/racing provisioning does not create duplicate members/mappings;
+- only a member can edit their own profile;
+- only a plan host can edit/cancel the plan;
+- only eligible non-host attendees can leave;
+- only a host can send/cancel its invitations;
+- only the receiver can accept/decline;
 - invite-only/private data is not leaked;
-- simultaneous capacity-sensitive writes remain transactionally correct;
-- invitation acceptance and attendee insertion roll back together;
-- saved activities stay private;
-- public profiles do not expose email/auth fields;
-- geospatial queries honor their distance bounds.
+- final-slot capacity remains transactionally correct under concurrency;
+- invitation acceptance and attendee insertion commit/rollback together;
+- blocked-member rules are enforced once implemented;
+- saved plans remain private;
+- public profiles do not expose another member's email/auth data;
+- account deletion follows the defined retention/deletion contract once implemented.
 
-Do not introduce an auth bypass just to make E2E easier.
+Do not add an authentication bypass merely to make this suite easier.
 
-## Android emulator strategy
+## Google provider testing
 
-Use emulator tests for fast preflight and repeatable UI/native checks.
+Android Google Sign-In depends on the installed build's certificate identity.
 
-Google Sign-In preflight requires an emulator image with Google Play services. A direct staging APK can validate the repository/test signing OAuth registration, but it cannot prove Play App Signing OAuth registration.
+```text
+package: com.charifmahmoudi.invite
+OAuth Android registration: package + installed signing SHA-1
+```
 
-The CI screenshot emulator currently uses:
+Three relevant signing identities exist:
+
+- repository/test APK certificate for direct APK testing;
+- Play upload certificate for upload authentication;
+- Play App Signing certificate for builds installed from Google Play.
+
+A direct APK Google smoke cannot prove the Play-signed OAuth path. A controlled Play-installed provider smoke remains valuable before production distribution.
+
+Unattended Google account selection is also less deterministic than email/password automation; CI should verify build/configuration where possible without storing a real person's Google credentials.
+
+## Play Store screenshot testing
+
+The earlier screenshot workflow run `34176724947` technically succeeded and published two screenshots. Later review of its evidence found a visible Android system `Quickstep isn't responding` dialog over the captures.
+
+Therefore those images are **not acceptable creative evidence** even though the API upload succeeded.
+
+The hardening version of `scripts/play-store-capture.sh` now:
+
+- detects Android `isn't responding` dialogs;
+- never hides an Invite ANR;
+- may choose **Wait** for a non-Invite system ANR;
+- re-dumps UI state before accepting a target screen;
+- runs a clean-capture assertion immediately before each screenshot;
+- fails if an ANR/error dialog remains visible.
+
+Clean screenshots should be regenerated before public release.
+
+## Play-delivered physical-device acceptance
+
+A Play-installed device test is the only layer that can directly exercise, together:
+
+- Play tester delivery;
+- Play App Signing installation identity;
+- Play-signed Google OAuth configuration;
+- real Android account chooser behavior;
+- physical-device sleep/background/network behavior;
+- install/reinstall/update behavior.
+
+The earlier versionCode 5 candidate **does install and launch** on the physical test phone.
+
+The release owner explicitly waived the full functional suite for that candidate. Therefore the following are **waived/not executed, not passed** for that candidate:
+
+1. email/password signup;
+2. email verification;
+3. onboarding/profile provisioning;
+4. returning email/password sign-in;
+5. password reset;
+6. Google Sign-In;
+7. Firebase ID token -> Express -> MongoDB;
+8. restart/session persistence;
+9. logout;
+10. repeated login preserves the same Invite member;
+11. no duplicate MongoDB member/identity mapping;
+12. existing-email collision returns `ACCOUNT_LINK_REQUIRED`;
+13. background/sleep resume;
+14. network-change recovery;
+15. reinstall/update behavior.
+
+A future production candidate may choose a different acceptance policy, but documentation must always distinguish **executed and passed** from **waived/not executed**.
+
+## High-value managed-auth journeys to automate next
+
+1. disposable Firebase user -> programmatic verification -> app onboarding -> stable Invite member;
+2. returning email/password sign-in -> same member;
+3. app process restart -> session restores -> same member;
+4. password reset -> same Invite identity;
+5. logout -> no residual Invite/Firebase session;
+6. existing-email collision -> `ACCOUNT_LINK_REQUIRED`;
+7. host creates plan -> invites guest -> guest accepts -> attendee/capacity state correct;
+8. host edit/cancel and attendee leave once those workflows are implemented;
+9. block/report/delete once public-MVP safety controls are implemented.
+
+Representative multi-user flow:
+
+```text
+HOST auth/onboard
+  -> create plan
+  -> invite GUEST
+  -> sign out
+GUEST auth/onboard
+  -> accept invitation
+  -> assert attendee/capacity
+```
+
+## Emulator strategy
+
+Current native CI target:
 
 ```text
 API level: 35
 architecture: x86_64
 profile: Pixel 6
-hardware acceleration: /dev/kvm
 ```
 
-Emulator acceptance is useful for:
-
-- app startup/rendering;
-- email/password UI;
-- verification state handling;
-- onboarding/profile UI;
-- session restore logic;
-- logout;
-- staging API/MongoDB behavior;
-- direct-APK Google Sign-In preflight.
-
-It is no longer the final release gate once a Play Internal testing release exists.
-
-## Play-delivered physical-device acceptance
-
-The final Android release gate must run from the **Google Play Internal testing install**, because only that proves:
-
-- Play track/tester delivery;
-- Play App Signing install identity;
-- Play-signed Google OAuth registration;
-- real Android account chooser behavior;
-- real device background/sleep/network behavior;
-- install/reinstall/update behavior under Play.
-
-Required suite:
-
-1. install from Google Play;
-2. launch;
-3. email/password signup;
-4. email verification;
-5. onboarding/profile provisioning;
-6. returning email/password sign-in;
-7. password reset;
-8. Google Sign-In;
-9. Firebase ID token -> Express -> MongoDB;
-10. session persistence after restart;
-11. logout;
-12. repeat login preserves the same Invite member;
-13. no duplicate MongoDB member/identity mapping;
-14. existing-email collision returns `ACCOUNT_LINK_REQUIRED`;
-15. background/sleep resume;
-16. network-change recovery;
-17. uninstall/reinstall or intentional Play update behavior.
-
-Current status: tester eligibility and the Install button are visible, but the physical install currently ends with Play's generic **"Something went wrong on our end"** message. Therefore acceptance has not started on a Play-delivered binary yet.
-
-## Google provider testing
-
-Google provider UI is a release/configuration smoke, not a routine unattended CI login path.
-
-A successful native build is not enough. Google Sign-In requires an Android OAuth client matching:
-
-```text
-package: com.charifmahmoudi.invite
-signing SHA-1: certificate used by that installed build
-```
-
-The current relevant identities are:
-
-- repository/test APK SHA-1 for direct APK preflight;
-- Play upload key SHA-1 for upload authentication only;
-- Play App Signing SHA-1 for builds installed from Google Play.
-
-See [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
-
-## Stable managed-auth selectors
-
-```text
-welcome-screen
-welcome-sign-in
-auth-sign-in-screen
-auth-registration
-auth-email
-auth-password
-auth-submit
-auth-google
-auth-error
-auth-email-verification
-auth-check-verification
-auth-profile-onboarding
-profile-name
-profile-city
-profile-submit
-```
-
-The compatibility path intentionally reuses core auth selectors so historical Maestro coverage remains useful during migration.
-
-## High-value journeys
-
-Prioritize these managed-auth journeys:
-
-1. register -> verify -> onboard -> same member on returning sign-in;
-2. unverified identity cannot provision a profile;
-3. password reset preserves the same Invite member;
-4. app restart restores the Firebase session;
-5. sign-out clears Firebase/Invite/Google session state;
-6. Google first sign-in and repeat sign-in resolve to the same member;
-7. existing-email collision returns `ACCOUNT_LINK_REQUIRED`;
-8. multi-user invitation/capacity rules remain correct under Firebase identities.
-
-Representative multi-user flow:
-
-```text
-HOST sign-in -> create activity -> invite GUEST
--> sign out -> GUEST sign-in -> accept invitation
--> assert attendee/capacity state
-```
+Use emulators for repeatability, not as a claim that every physical-device or Play-signing behavior was proven.
 
 ## MongoDB schema gate
 
-The isolated `invite_firebase_e2e` database uses canonical server index definitions. Bootstrap can temporarily use:
+The isolated `invite_firebase_e2e` database uses canonical server index definitions.
+
+Controlled bootstrap can temporarily set:
 
 ```text
 MONGODB_ENSURE_INDEXES_ON_START=true
 ```
 
-Return it to `false` after indexes exist. Normal scale-to-zero startup must not maintain indexes on every cold start.
+Return it to `false` after indexes exist. Normal scale-to-zero startup should not rebuild indexes on every cold start.
 
-## Cold-start behavior
+## Cold starts and retries
 
-Scale-to-zero hosting can make the first request slow. Reads and E2E waits may tolerate a bounded cold-start delay.
+Render scale-to-zero can make a first request slower.
 
-Do not blindly retry writes such as activity creation or invitation acceptance until those operations have explicit idempotency guarantees.
+Reads and safe status checks may use bounded retries. Do not blindly retry non-idempotent writes such as plan creation or invitation acceptance until the operation has an explicit idempotency contract.
 
-## Build/signing evidence
+A cold start or timeout must never be interpreted as proof that a Firebase member has no Invite profile.
 
-Release evidence should record:
+## Evidence requirements
 
-- exact Git commit;
-- workflow run ID;
+Release/test evidence should record as applicable:
+
+- exact Git SHA;
+- workflow run/job ID;
 - target API environment;
 - Android package/versionCode;
-- artifact checksum when relevant;
-- signing certificate fingerprint appropriate to the channel;
+- artifact checksum;
+- signing certificate fingerprint for the tested channel;
 - Play track/release result;
-- screenshots/logs that do not contain secrets.
+- sanitized screenshots/logs.
 
-Do not store passwords, MongoDB URIs, service-account keys, signing private keys, OAuth secrets or live Firebase ID tokens in evidence artifacts.
+Never store in test evidence:
 
-## Release gate
+- passwords;
+- MongoDB URIs;
+- Firebase ID/refresh tokens;
+- OAuth client secrets;
+- service-account private keys;
+- keystores/signing private keys;
+- password-reset links.
 
-The Firebase migration is not ready for `main` solely because CI, APK, AAB, store listing or Play track publication passes.
+## MVP quality gate
 
-Require the full Play-delivered physical acceptance suite, MongoDB identity verification, collision-safety check, exact-revision recheck, and a safe production client/server cutover plan before promotion.
+A public MVP candidate is not ready merely because TypeScript, APK/AAB build, store listing, or Play upload succeeds.
+
+Require the exact candidate SHA to satisfy the automated quality bar in [MVP.md](./MVP.md), have no open P0 identity/authorization/safety defects, have a reviewed production cutover/rollback plan, and have documentation that accurately records any manual/physical tests that were executed or waived.
