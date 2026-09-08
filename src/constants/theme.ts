@@ -4,19 +4,36 @@ export const palette = {
   canvas: '#F7F6F1',
   surface: '#FFFFFF',
   surfaceMuted: '#EFF2ED',
+  surfaceRaised: '#FFFFFF',
   ink: '#19231E',
   inkMuted: '#667169',
   primary: '#EE6548',
   primaryDark: '#C8462D',
+  primarySoft: '#FEF3EF',
+  primaryTint: '#F9DDD4',
   forest: '#315C4C',
   forestSoft: '#DDE9E3',
   amber: '#F3B84B',
+  warning: '#8A5C08',
+  warningSoft: '#FFF0D2',
   border: '#DFE4DE',
+  borderStrong: '#C8D0C9',
   error: '#B53932',
+  errorSoft: '#FBEAE8',
   success: '#2E765A',
+  successSoft: '#DDE9E3',
+  info: '#315C4C',
+  infoSoft: '#E8F0EC',
   white: '#FFFFFF',
   black: '#0C100E',
   overlay: 'rgba(12, 16, 14, 0.42)',
+} as const;
+
+export const feedbackColors = {
+  info: { background: palette.infoSoft, foreground: palette.info, border: '#C9DDD3' },
+  success: { background: palette.successSoft, foreground: palette.success, border: '#BED5C8' },
+  warning: { background: palette.warningSoft, foreground: palette.warning, border: '#ECD6A0' },
+  error: { background: palette.errorSoft, foreground: palette.error, border: '#F0C7C2' },
 } as const;
 
 export const categoryColors: Record<
