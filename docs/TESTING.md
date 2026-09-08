@@ -104,6 +104,8 @@ Do not introduce an auth bypass just to make E2E easier.
 
 Use emulator tests for fast preflight and repeatable UI/native checks.
 
+Every emulator acceptance run must reset the isolated dataset through the guarded fixture boundary described in [E2E_FIXTURES.md](./E2E_FIXTURES.md). The boundary is disabled by default, requires a dedicated `e2e`/`test` database name and protected token, and cannot target the production API URL.
+
 Google Sign-In preflight requires an emulator image with Google Play services. A direct staging APK can validate the repository/test signing OAuth registration, but it cannot prove Play App Signing OAuth registration.
 
 The CI screenshot emulator currently uses:

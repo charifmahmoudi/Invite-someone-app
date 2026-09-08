@@ -24,6 +24,7 @@ jobs:
       EXPO_PUBLIC_API_URL: ${{ inputs.api_url || vars.INVITE_E2E_API_URL }}
       E2E_EMAIL: demo@invite.app
       E2E_PASSWORD: invite-demo
+      E2E_FIXTURES_TOKEN: ${{ secrets.INVITE_E2E_FIXTURES_TOKEN }}
 
     steps:
       - name: Require isolated E2E API
@@ -34,6 +35,10 @@ jobs:
           fi
           if [ "$EXPO_PUBLIC_API_URL" = "https://invite-someone-api.onrender.com" ]; then
             echo "Refusing to run E2E against the production/demo Render API."
+            exit 1
+          fi
+          if [ -z "$E2E_FIXTURES_TOKEN" ]; then
+            echo "Set the protected INVITE_E2E_FIXTURES_TOKEN repository secret."
             exit 1
           fi
 
@@ -57,6 +62,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Reset deterministic E2E fixtures
+        run: bash scripts/reset-e2e-fixtures.sh
 
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install

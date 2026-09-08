@@ -18,10 +18,10 @@ For topology and deployment ownership, see [DEPLOYMENT_ARCHITECTURE.md](./DEPLOY
 
 ## Current environments
 
-| Environment | Purpose | Git branch | API auth mode | MongoDB database | Render auto deploy |
-| --- | --- | --- | --- | --- | --- |
-| Production | Existing live path | `main` | compatibility/internal | `invite_someone` | off |
-| Firebase staging | Migration/release acceptance | `impl/firebase-auth` | `firebase` | `invite_firebase_e2e` | off |
+| Environment      | Purpose                      | Git branch           | API auth mode          | MongoDB database      | Render auto deploy |
+| ---------------- | ---------------------------- | -------------------- | ---------------------- | --------------------- | ------------------ |
+| Production       | Existing live path           | `main`               | compatibility/internal | `invite_someone`      | off                |
+| Firebase staging | Migration/release acceptance | `impl/firebase-auth` | `firebase`             | `invite_firebase_e2e` | off                |
 
 Firebase staging API:
 
@@ -414,7 +414,7 @@ If a test identity must be removed:
 3. remove only that isolated test member's domain records and `user_identities` mapping;
 4. never perform equivalent cleanup against production `invite_someone`.
 
-For destructive fixture resets, use a guarded E2E script rather than ad-hoc production-like commands.
+For deterministic full-suite resets, follow [E2E_FIXTURES.md](./E2E_FIXTURES.md) and use `scripts/reset-e2e-fixtures.sh`. The server and client-side script independently reject unsafe targets. Keep the fixture token in Render and the protected `INVITE_E2E_FIXTURES_TOKEN` GitHub secret; never print it or pass it to Maestro.
 
 ## Release acceptance checklist
 
