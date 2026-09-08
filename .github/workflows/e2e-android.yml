@@ -24,18 +24,6 @@ jobs:
     name: Internal-auth compatibility smoke
     runs-on: ubuntu-latest
     timeout-minutes: 50
-    services:
-      mongo:
-        image: mongo:8.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-        env:
-          MONGO_INITDB_DATABASE: invite_android_e2e
     env:
       EXPO_PUBLIC_API_URL: http://127.0.0.1:4000
       E2E_EMAIL: demo@invite.app
@@ -74,10 +62,20 @@ jobs:
 
       - name: Start disposable MongoDB replica set
         run: |
-          docker exec "${{ job.services.mongo.id }}" mongosh --quiet --eval \
+          docker run --detach --name invite-android-e2e-mongo \
+            --publish 27017:27017 \
+            mongo:8.0 --replSet rs0 --bind_ip_all
+          for attempt in {1..30}; do
+            if docker exec invite-android-e2e-mongo mongosh --quiet --eval \
+              'db.adminCommand({ ping: 1 })' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec invite-android-e2e-mongo mongosh --quiet --eval \
             'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
           for attempt in {1..30}; do
-            if docker exec "${{ job.services.mongo.id }}" mongosh --quiet --eval \
+            if docker exec invite-android-e2e-mongo mongosh --quiet --eval \
               'if (!db.hello().isWritablePrimary) quit(1)' >/dev/null; then
               exit 0
             fi
@@ -155,3 +153,20 @@ jobs:
           path: /tmp/invite-e2e-api.log
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Preserve MongoDB logs on failure
+        if: failure()
+        run: docker logs invite-android-e2e-mongo > /tmp/invite-e2e-mongodb.log 2>&1 || true
+
+      - name: Upload MongoDB logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-e2e-mongodb-logs-${{ github.run_id }}
+          path: /tmp/invite-e2e-mongodb.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop disposable MongoDB
+        if: always()
+        run: docker rm --force invite-android-e2e-mongo || true
