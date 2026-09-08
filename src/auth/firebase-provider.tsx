@@ -124,7 +124,8 @@ function FirebaseMongoBridge({ children }: { children: React.ReactNode }) {
     if (!identityLoaded) return;
 
     if (!user) {
-      setMongoApiTokenProvider(undefined);
+      // Firebase mode must never fall back to an old Invite-issued compatibility token.
+      setMongoApiTokenProvider(async () => null);
       setStatus('signed-out');
       return;
     }
