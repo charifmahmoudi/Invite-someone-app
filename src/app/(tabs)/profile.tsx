@@ -16,9 +16,13 @@ export default function ProfileScreen() {
   const { state, signOut, toggleSavedActivity } = useApp();
   const profile = useCurrentProfile();
   const hosted = state.activities.filter((activity) => activity.hostId === profile?.id);
+  const isPreviewSession = state.session?.mode === 'demo' || state.session?.mode === 'local';
 
   const logout = () => {
-    Alert.alert('Sign out?', 'Your locally saved demo data will remain on this device.', [
+    const body = isPreviewSession
+      ? 'Your locally saved preview data will remain on this device.'
+      : 'You can sign in again with the same account at any time.';
+    Alert.alert('Sign out?', body, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out',
@@ -59,7 +63,7 @@ export default function ProfileScreen() {
             <Text style={styles.headline}>{profile.headline}</Text>
             <Text style={styles.bio}>{profile.bio}</Text>
           </View>
-          {state.session?.mode !== 'supabase' ? (
+          {isPreviewSession ? (
             <View style={styles.modeBadge}>
               <AppIcon name="info" color={palette.forest} size={16} />
               <Text style={styles.modeText}>
