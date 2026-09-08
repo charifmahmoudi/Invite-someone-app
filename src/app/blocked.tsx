@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ export default function BlockedPeopleScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
-  const load = useCallback(async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(undefined);
     try {
@@ -31,8 +31,21 @@ export default function BlockedPeopleScreen() {
   }, [loadBlockedProfiles]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    void loadBlockedProfiles()
+      .then((nextProfiles) => {
+        if (active) setProfiles(nextProfiles);
+      })
+      .catch((caught: unknown) => {
+        if (active) setError(caught instanceof Error ? caught.message : 'Please try again.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadBlockedProfiles]);
 
   if (!state.hydrated) return null;
   if (!state.session) return <Redirect href="/(auth)/welcome" />;
@@ -76,7 +89,7 @@ export default function BlockedPeopleScreen() {
         ) : error ? (
           <View style={styles.errorWrap}>
             <FeedbackBanner message={error} title="Unable to load blocked people" tone="error" />
-            <Button label="Try again" onPress={() => void load()} variant="outline" />
+            <Button label="Try again" onPress={() => void refresh()} variant="outline" />
           </View>
         ) : profiles.length === 0 ? (
           <View style={styles.empty}>
@@ -92,7 +105,9 @@ export default function BlockedPeopleScreen() {
                 <Avatar profile={profile} size={52} />
                 <View style={styles.copy}>
                   <Text style={styles.name}>{profile.name}</Text>
-                  <Text style={styles.meta}>@{profile.handle} · {profile.city}</Text>
+                  <Text style={styles.meta}>
+                    @{profile.handle} · {profile.city}
+                  </Text>
                 </View>
                 <Button
                   fullWidth={false}
