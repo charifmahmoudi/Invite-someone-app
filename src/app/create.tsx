@@ -95,8 +95,8 @@ export default function CreateActivityScreen() {
       edges={['top', 'left', 'right']}
       contentContainerStyle={styles.scroll}
     >
-      <ScreenHeader eyebrow="NEW PLAN" onBack={() => router.back()} title="Create an activity" />
-      <View style={styles.content}>
+      <ScreenHeader eyebrow="NEW PLAN" onBack={() => router.back()} title="Create a plan" />
+      <View style={styles.content} testID="create-plan-screen">
         <View style={styles.heading}>
           <Text style={styles.title}>Make it easy to imagine saying yes.</Text>
           <Text style={styles.subtitle}>
@@ -111,6 +111,7 @@ export default function CreateActivityScreen() {
             maxLength={70}
             onChangeText={setTitle}
             placeholder="Canal walk & coffee"
+            testID="create-plan-title"
             value={title}
           />
           <InputField
@@ -119,6 +120,7 @@ export default function CreateActivityScreen() {
             multiline
             onChangeText={setDescription}
             placeholder="What will happen, who is it for, and what should people know?"
+            testID="create-plan-description"
             value={description}
           />
           <Text style={styles.fieldLabel}>Category</Text>
@@ -175,6 +177,7 @@ export default function CreateActivityScreen() {
             label="Meeting place"
             onChangeText={setLocation}
             placeholder="Café name, park entrance, or address"
+            testID="create-plan-location"
             value={location}
           />
           <InputField label="City" onChangeText={setCity} placeholder="City" value={city} />
@@ -187,7 +190,7 @@ export default function CreateActivityScreen() {
             <PressableScale
               accessibilityLabel="Decrease capacity"
               disabled={capacity <= 2}
-              onPress={() => setCapacity((value) => Math.max(2, value - 1))}
+              onPress={() => setCapacity((value) => Math.max(2, value - 1))
               style={styles.counterButton}
             >
               <Text style={styles.counterSymbol}>−</Text>
@@ -256,9 +259,10 @@ export default function CreateActivityScreen() {
         ) : null}
         <Button
           icon="plus"
-          label="Create & invite people"
+          label="Create plan & invite people"
           loading={state.busy}
           onPress={() => void submit()}
+          testID="create-plan-submit"
         />
       </View>
     </ScrollScreen>
