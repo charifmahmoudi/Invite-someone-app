@@ -5,6 +5,7 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import { AppIcon } from '@/components/ui/app-icon';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Pill } from '@/components/ui/chip';
 import { PressableScale } from '@/components/ui/pressable-scale';
 import { ScreenHeader } from '@/components/ui/screen-header';
@@ -16,7 +17,14 @@ import { formatActivityDate, reliabilityLabel } from '@/utils/format';
 export default function ActivityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { state, joinActivity, respondToInvitation, toggleSavedActivity } = useApp();
+  const {
+    state,
+    cancelActivity,
+    joinActivity,
+    leaveActivity,
+    respondToInvitation,
+    toggleSavedActivity,
+  } = useApp();
   const activity = state.activities.find((candidate) => candidate.id === id);
   const host = state.profiles.find((profile) => profile.id === activity?.hostId);
   const userId = state.session?.userId;
@@ -45,6 +53,7 @@ export default function ActivityDetailsScreen() {
   const isHost = activity.hostId === userId;
   const isAttending = activity.attendeeIds.includes(userId ?? '');
   const isFull = activity.attendeeIds.length >= activity.capacity;
+  const isCancelled = activity.status === 'cancelled';
   const saved = state.savedActivityIds.includes(activity.id);
   const colors = categoryColors[activity.category];
 
@@ -70,6 +79,61 @@ export default function ActivityDetailsScreen() {
     }
   };
 
+  const cancel = () => {
+    Alert.alert(
+      'Cancel this plan?',
+      'The plan will stay in history, but nobody will be able to join or receive a new invitation. Pending invitations will be cancelled.',
+      [
+        { text: 'Keep plan', style: 'cancel' },
+        {
+          text: 'Cancel plan',
+          style: 'destructive',
+          onPress: () => {
+            void cancelActivity(activity.id).catch((error: unknown) =>
+              Alert.alert(
+                'Unable to cancel plan',
+                error instanceof Error ? error.message : 'Please try again.',
+              ),
+            );
+          },
+        },
+      ],
+    );
+  };
+
+  const leave = () => {
+    Alert.alert(
+      'Leave this plan?',
+      'You will be removed from the attendee list. You can join again later only if the plan is still available to you and has space.',
+      [
+        { text: 'Stay in plan', style: 'cancel' },
+        {
+          text: 'Leave plan',
+          style: 'destructive',
+          onPress: () => {
+            void leaveActivity(activity.id).catch((error: unknown) =>
+              Alert.alert(
+                'Unable to leave plan',
+                error instanceof Error ? error.message : 'Please try again.',
+              ),
+            );
+          },
+        },
+      ],
+    );
+  };
+
+  const report = () => {
+    router.push({
+      pathname: '/report',
+      params: {
+        targetType: 'activity',
+        targetId: activity.id,
+        targetName: activity.title,
+      },
+    });
+  };
+
   return (
     <ScrollScreen contentContainerStyle={styles.scroll}>
       <ScreenHeader
@@ -77,6 +141,7 @@ export default function ActivityDetailsScreen() {
         right={
           <PressableScale
             accessibilityLabel={saved ? 'Remove from saved plans' : 'Save plan'}
+            disabled={isCancelled}
             haptic
             onPress={() => void toggleSavedActivity(activity.id)}
             style={styles.headerButton}
@@ -90,14 +155,17 @@ export default function ActivityDetailsScreen() {
         }
       />
 
-      <View style={styles.content}>
+      <View style={styles.content} testID="activity-details-screen">
         <LinearGradient colors={[colors.background, palette.surface]} style={styles.hero}>
           <View style={styles.heroTop}>
             <Pill label={activity.category} />
-            <Pill
-              label={activity.visibility === 'invite-only' ? 'Invite-only' : 'Community'}
-              tone="accent"
-            />
+            <View style={styles.heroPills}>
+              {isCancelled ? <Pill label="Cancelled" tone="accent" /> : null}
+              <Pill
+                label={activity.visibility === 'invite-only' ? 'Invite-only' : 'Community'}
+                tone="accent"
+              />
+            </View>
           </View>
           <View>
             <Text style={styles.date}>{formatActivityDate(activity.startAt)}</Text>
@@ -111,7 +179,15 @@ export default function ActivityDetailsScreen() {
           </View>
         </LinearGradient>
 
-        {invitation ? (
+        {isCancelled ? (
+          <FeedbackBanner
+            message="The host cancelled this plan. It remains visible so attendees have a clear record of what changed."
+            title="This plan is cancelled"
+            tone="warning"
+          />
+        ) : null}
+
+        {invitation && !isCancelled ? (
           <View style={styles.invitationBox}>
             <View style={styles.inviteHeading}>
               <AppIcon name="mail" color={palette.primaryDark} size={22} />
@@ -135,7 +211,7 @@ export default function ActivityDetailsScreen() {
           </View>
         ) : null}
 
-        {isAttending && !invitation ? (
+        {isAttending && !invitation && !isCancelled ? (
           <View style={styles.goingBanner}>
             <AppIcon name="check" color={palette.white} size={20} />
             <Text style={styles.goingText}>
@@ -171,18 +247,20 @@ export default function ActivityDetailsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hosted by</Text>
           <PressableScale
-            onPress={() => router.push({ pathname: '/person/[id]', params: { id: host.id } })}
+            onPress={() =>
+              isHost
+                ? router.push('/(tabs)/profile')
+                : router.push({ pathname: '/person/[id]', params: { id: host.id } })
+            }
             style={styles.hostCard}
           >
             <Avatar profile={host} size={58} />
             <View style={styles.hostCopy}>
-              <View style={styles.hostNameRow}>
-                <Text style={styles.hostName}>{host.name}</Text>
-                {host.isVerified ? <AppIcon name="shield" color={palette.forest} size={17} /> : null}
-              </View>
+              <Text style={styles.hostName}>{host.name}</Text>
               <Text style={styles.hostHeadline}>{host.headline}</Text>
               <Text style={styles.reliability}>
-                {reliabilityLabel(host.completedActivities, host.reliabilityScore)} · {host.completedActivities} plans joined
+                {reliabilityLabel(host.completedActivities, host.reliabilityScore)} ·{' '}
+                {host.completedActivities} plans
               </Text>
             </View>
             <AppIcon name="chevron-right" color={palette.inkMuted} size={20} />
@@ -217,17 +295,31 @@ export default function ActivityDetailsScreen() {
           </View>
         </View>
 
-        {isHost ? (
-          <Button
-            icon="send"
-            label="Invite more people"
-            onPress={() =>
-              router.push({ pathname: '/invite/[activityId]', params: { activityId: activity.id } })
-            }
-          />
-        ) : !isAttending && !invitation && activity.visibility === 'community' && !isFull ? (
-          <Button label="Join this plan" onPress={() => void join()} />
-        ) : !isAttending && !invitation ? (
+        {isHost && !isCancelled ? (
+          <View style={styles.hostActions}>
+            <Button
+              icon="edit"
+              label="Edit plan"
+              onPress={() =>
+                router.push({ pathname: '/activity/edit/[id]', params: { id: activity.id } })
+              }
+              testID="edit-plan"
+              variant="outline"
+            />
+            <Button
+              icon="send"
+              label="Invite more people"
+              onPress={() =>
+                router.push({ pathname: '/invite/[activityId]', params: { activityId: activity.id } })
+              }
+            />
+            <Button label="Cancel plan" onPress={cancel} testID="cancel-plan" variant="danger" />
+          </View>
+        ) : !isHost && isAttending && !isCancelled ? (
+          <Button label="Leave plan" onPress={leave} testID="leave-plan" variant="danger" />
+        ) : !isHost && !isAttending && !invitation && !isCancelled && activity.visibility === 'community' && !isFull ? (
+          <Button label="Join this plan" onPress={() => void join()} testID="join-plan" />
+        ) : !isHost && !isAttending && !invitation && !isCancelled ? (
           <View style={styles.unavailable}>
             <Text style={styles.unavailableText}>
               {isFull ? 'This plan is full.' : 'This plan is invite-only.'}
@@ -242,6 +334,15 @@ export default function ActivityDetailsScreen() {
             <Text style={styles.safetyBody}>
               Meet in public, keep your own transport options, and leave whenever you want.
             </Text>
+            {!isHost ? (
+              <Button
+                fullWidth={false}
+                label="Report this plan"
+                onPress={report}
+                testID="report-activity"
+                variant="ghost"
+              />
+            ) : null}
           </View>
         </View>
       </View>
@@ -271,7 +372,8 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
     ...shadow.card,
   },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between' },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  heroPills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'flex-end' },
   date: { ...typography.label, color: palette.primaryDark, textTransform: 'uppercase' },
   title: { ...typography.display, color: palette.ink, marginTop: spacing.md },
   vibeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
@@ -280,7 +382,7 @@ const styles = StyleSheet.create({
   invitationBox: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#F0D8CF',
+    borderColor: palette.border,
     backgroundColor: palette.primarySoft,
     padding: spacing.lg,
     gap: spacing.md,
@@ -329,7 +431,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   hostCopy: { flex: 1, gap: 2 },
-  hostNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hostName: { ...typography.h3, color: palette.ink },
   hostHeadline: { ...typography.small, color: palette.inkMuted },
   reliability: { ...typography.micro, color: palette.forest, marginTop: 3 },
@@ -341,6 +442,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   attendeeName: { ...typography.bodyStrong, color: palette.ink, flex: 1 },
+  hostActions: { gap: spacing.md },
   unavailable: {
     borderRadius: radius.md,
     backgroundColor: palette.surfaceMuted,
@@ -354,7 +456,7 @@ const styles = StyleSheet.create({
     backgroundColor: palette.forestSoft,
     padding: spacing.lg,
   },
-  safetyCopy: { flex: 1, gap: 3 },
+  safetyCopy: { flex: 1, gap: spacing.sm },
   safetyTitle: { ...typography.bodyStrong, color: palette.forest },
   safetyBody: { ...typography.small, color: palette.forest },
   notFound: {
