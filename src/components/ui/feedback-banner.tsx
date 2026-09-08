@@ -9,7 +9,10 @@ type FeedbackTone = keyof typeof feedbackColors;
 interface FeedbackBannerProps {
   tone?: FeedbackTone;
   title: string;
+  /** Preferred descriptive copy prop. */
   body?: string;
+  /** Compatibility alias for call sites that describe the copy as a message. */
+  message?: string;
   actionLabel?: string;
   onAction?: () => void;
   testID?: string;
@@ -26,11 +29,13 @@ export function FeedbackBanner({
   tone = 'info',
   title,
   body,
+  message,
   actionLabel,
   onAction,
   testID,
 }: FeedbackBannerProps) {
   const colors = feedbackColors[tone];
+  const copy = body ?? message;
 
   return (
     <View
@@ -44,7 +49,7 @@ export function FeedbackBanner({
         </View>
         <View style={styles.copy}>
           <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-          {body ? <Text style={[styles.body, { color: colors.foreground }]}>{body}</Text> : null}
+          {copy ? <Text style={[styles.body, { color: colors.foreground }]}>{copy}</Text> : null}
         </View>
       </View>
       {actionLabel && onAction ? (
