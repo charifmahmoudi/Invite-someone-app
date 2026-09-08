@@ -190,7 +190,7 @@ export default function CreateActivityScreen() {
             <PressableScale
               accessibilityLabel="Decrease capacity"
               disabled={capacity <= 2}
-              onPress={() => setCapacity((value) => Math.max(2, value - 1))
+              onPress={() => setCapacity((value) => Math.max(2, value - 1))}
               style={styles.counterButton}
             >
               <Text style={styles.counterSymbol}>−</Text>
