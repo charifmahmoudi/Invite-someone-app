@@ -18,6 +18,8 @@ A user story is `verified` only when all of the following are true:
 8. The user manual explains the workflow, errors, privacy behavior, and known limitations.
 9. Static checks, tests, Android E2E, and evidence validation pass for the same commit.
 
+The machine-readable contract is `docs/story-evidence.json`. Every documented `US-XX-AC-XX` scenario must appear exactly once with implementation references, intended test layers, current automated-test references, an Android E2E flow reference, screenshot checkpoints, and a user-manual anchor. Missing evidence may remain empty while a story is `partial`; changing a story to `verified` makes every referenced artifact mandatory in CI.
+
 `implemented`, `partially-tested`, `waived`, and `verified` are distinct states. A waiver never counts as a pass.
 
 ## Delivery sequence
