@@ -1,8 +1,10 @@
 # Firebase Auth setup
 
+_Last verified: 2026-09-08._
+
 Invite uses Firebase Authentication for identity only. The Express API remains the authorization and business-logic boundary, and MongoDB Atlas remains the application database.
 
-For current migration progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). This document explains architecture and configuration only. For the repeatable operator procedure—building an APK, emulator-first acceptance, the short final phone smoke, adding users, testing verification/password reset/Google sign-in, inspecting MongoDB, operating the isolated Render service, troubleshooting, and release acceptance—use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
+For current migration progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For deployment/runtime topology, see [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md). For the repeatable operator procedure, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md).
 
 ## Runtime modes
 
@@ -11,11 +13,9 @@ Invite keeps two authentication modes during migration:
 - **Compatibility mode**: no complete Firebase client configuration is embedded in the Expo build and the API uses `AUTH_MODE=internal`.
 - **Firebase mode**: the Expo build contains Firebase public client configuration and the API uses `AUTH_MODE=firebase`.
 
-Do not switch the current production API to Firebase-only authentication before a compatible mobile build is available. Older internal-auth binaries cannot authenticate against an API that accepts only Firebase ID tokens.
+Do not switch the production API to Firebase-only authentication before a compatible Play-delivered mobile build has passed acceptance. Older internal-auth binaries cannot authenticate against an API that accepts only Firebase ID tokens.
 
 ## Connected Firebase project
-
-Development project:
 
 ```text
 project ID: invite-someone-app
@@ -28,7 +28,7 @@ Firebase owns email/password credentials, verification emails, password resets, 
 
 ## Firebase Console configuration
 
-Under **Security -> Authentication -> Sign-in method**:
+Under **Authentication -> Sign-in method**:
 
 1. enable **Email/Password**;
 2. enable **Google**;
@@ -50,29 +50,42 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=367720887571
 EXPO_PUBLIC_FIREBASE_APP_ID=1:367720887571:web:your_web_app_id
 ```
 
-Firebase Web configuration identifies the client and is designed to ship in the app. It is not a Firebase Admin credential. Never place Firebase service-account JSON, private keys, OAuth client secrets, or MongoDB credentials in `EXPO_PUBLIC_*` variables.
+Firebase Web configuration identifies the client and is designed to ship in the app. It is not a Firebase Admin credential. Never place Firebase service-account JSON, private keys, OAuth client secrets, Play signing keys, or MongoDB credentials in `EXPO_PUBLIC_*` variables.
 
 Managed authentication activates only when the Invite API URL and complete Firebase client configuration are present. Without them, Invite preserves the compatibility password/demo path.
 
-## Google sign-in
+## Google Sign-In
 
-Android Google sign-in uses the native `react-native-nitro-google-signin` integration and Android Credential Manager. The native Google ID token is exchanged for a Firebase credential with `GoogleAuthProvider.credential()` and `signInWithCredential()`.
+Android Google Sign-In uses the native `react-native-nitro-google-signin` integration and Android Credential Manager. The native Google ID token is exchanged for a Firebase credential with `GoogleAuthProvider.credential()` and `signInWithCredential()`.
 
 Android configuration is split between:
 
 - `google-services.json`, registered for package `com.charifmahmoudi.invite` and referenced from `expo.android.googleServicesFile`;
 - a Google OAuth **Android** client registered for the same package and the signing certificate SHA-1;
-- the Firebase/Google-generated **Web** OAuth client contained in `google-services.json`, which the native library auto-detects for ID-token issuance.
+- the Firebase/Google-generated **Web** OAuth client contained in `google-services.json`, used for ID-token issuance.
 
 No OAuth client secret and no `EXPO_PUBLIC_GOOGLE_*` variables are required for the Android flow.
 
-Every Android signing identity that will ship needs a matching OAuth registration. A development/debug certificate, a locally signed release, and Google Play App Signing can have different SHA-1 fingerprints; register the actual signing certificate used for each build channel instead of reusing or guessing one.
+Every Android signing identity that will be installed needs a matching OAuth registration. The current important channels are:
 
-Google sign-in is currently enabled on Android only. iOS stays disabled until its Firebase/Google native app configuration is added and validated.
+```text
+GitHub/test APK SHA-1:
+5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25
+
+Play upload key SHA-1:
+96:55:A1:7E:35:C7:CF:DE:67:BD:3C:E9:6C:F5:22:73:99:F8:06:A3
+
+Play App Signing SHA-1:
+44:A2:72:01:D0:13:DE:A3:79:D1:41:92:67:6C:52:89:20:10:E6:56
+```
+
+The Play upload key authenticates uploads; it is not normally the installed app identity. For Google Sign-In in a build installed from Google Play, the **Play App Signing SHA-1** must be registered.
+
+Google Sign-In is currently enabled on Android only. iOS stays disabled until its Firebase/Google native app configuration is added and validated.
 
 ## Invite API configuration
 
-The Firebase-enabled API needs only the project ID for authentication:
+The Firebase-enabled API needs only the project ID for Firebase token verification:
 
 ```bash
 NODE_ENV=production
@@ -84,7 +97,7 @@ MONGODB_ENSURE_INDEXES_ON_START=false
 CORS_ORIGINS=*
 ```
 
-`invite_firebase_e2e` is the current isolated migration-test database. Production remains on its existing database. Never use a production MongoDB URI for Firebase migration E2E testing.
+`invite_firebase_e2e` is the current isolated migration-test database. Production remains on `invite_someone` with the existing compatibility path until explicit cutover. Never use a production MongoDB URI for Firebase migration E2E testing.
 
 The current server does **not** require Firebase Admin SDK credentials. It verifies Firebase ID-token signatures against Google's published Firebase signing certificates and validates:
 
@@ -123,18 +136,55 @@ On React Native, Firebase session persistence uses AsyncStorage through Firebase
 
 Invite domain state is reloaded after authentication, provisioning, or account changes. Signing out of Invite also signs out of Firebase and the native Google session.
 
-## Staged rollout
+## Staging environment
 
-1. Enable Email/Password and Google in the Firebase project.
-2. Register the Android Firebase app and OAuth clients for the actual signing certificate.
-3. Build and validate the native Firebase-enabled Android client on an implementation branch.
-4. Configure the isolated Invite API with `AUTH_MODE=firebase` and `FIREBASE_PROJECT_ID=invite-someone-app`.
-5. Run required MongoDB index maintenance against the isolated auth database.
-6. Run the hosted Firebase-token boundary smoke.
-7. Follow [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) for emulator-first registration, email verification, password reset, session persistence, Google sign-in, MongoDB identity mapping and collision-safety tests, then run the short final physical-phone smoke.
-8. Test Play-distributed installation/signing as described in [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
-9. Ship a Firebase-enabled production build before switching the production API away from internal compatibility auth.
-10. Retire internal password/JWT issuance only after unsupported legacy clients can no longer reach the production API.
+Current Firebase staging backend:
+
+```text
+Render service: invite-someone-api-firebase-e2e
+URL: https://invite-someone-api-firebase-e2e.onrender.com
+branch: impl/firebase-auth
+auto deploy: off
+AUTH_MODE=firebase
+FIREBASE_PROJECT_ID=invite-someone-app
+MONGODB_DB_NAME=invite_firebase_e2e
+```
+
+Because Render auto-deploy is disabled, branch HEAD and live backend revision must be checked separately. Do not assume a GitHub commit is running on Render merely because it is at branch HEAD.
+
+## Google Play staging distribution
+
+The migration now has a real Google Play Internal testing release:
+
+```text
+package: com.charifmahmoudi.invite
+track: internal
+release: Invite Internal 15
+versionCode: 5
+```
+
+GitHub Actions builds the upload-key-signed AAB and publishes it through the Android Publisher API using keyless GitHub OIDC -> Google Cloud Workload Identity Federation.
+
+The tester opt-in page and Install button are visible. The current remaining delivery issue is a generic Play Store install error on the physical device, so the Play-delivered acceptance suite has not yet passed.
+
+## Current rollout sequence
+
+1. **Done:** enable Email/Password and Google in Firebase.
+2. **Done:** register Android Firebase/OAuth configuration for staging and Play App Signing identities.
+3. **Done:** implement Firebase email/password, verification, reset, persisted sessions and native Android Google Sign-In.
+4. **Done:** configure isolated Render API with `AUTH_MODE=firebase` and isolated MongoDB database.
+5. **Done:** bootstrap/verify MongoDB indexes.
+6. **Done:** prove the hosted real-Firebase-token API boundary and unverified-email guard.
+7. **Done:** build upload-key-signed Android AAB and configure keyless GitHub-to-Play publication.
+8. **Done:** publish Android `versionCode 5` to Google Play Internal testing.
+9. **Done:** complete API-visible store listing text/icon/feature graphic and publish two real phone screenshots.
+10. **Current:** get the Play-delivered build installed successfully on the physical tester device.
+11. **Current:** run the complete Play-installed acceptance suite and verify MongoDB identity invariants.
+12. **Then:** complete remaining Play Console App content/production-access requirements as applicable.
+13. **Then:** fast-forward the exact accepted Firebase code to `main`.
+14. **Then:** distribute a compatible production client and verify production Render health.
+15. **Then:** explicitly switch production API auth mode only when unsupported compatibility clients are addressed.
+16. **Later:** retire internal password/JWT issuance when safe.
 
 ## Still intentionally out of scope
 
