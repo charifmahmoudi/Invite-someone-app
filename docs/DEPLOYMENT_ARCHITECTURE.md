@@ -2,293 +2,359 @@
 
 _Last verified: 2026-09-08._
 
-This document is the deployment source of truth for Invite. It records the environments that actually exist, which branch and service each environment uses, how Android artifacts reach Google Play, which systems own secrets, and the promotion/cutover sequence.
+This document is the deployment source of truth for Invite. It separates **source state**, **CI/release artifacts**, and **live infrastructure state**. Those are intentionally independent because Render auto-deploy is disabled.
 
-For implementation architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md). For current release progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For operator procedures, see [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md) and [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md).
+For application internals, see [ARCHITECTURE.md](./ARCHITECTURE.md). For active work and release state, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For public-MVP requirements, see [MVP.md](./MVP.md).
 
-## System topology
+## Topology
 
 ```mermaid
 flowchart LR
-  subgraph Client[Client distribution]
+  subgraph Source[Source and CI]
+    Main[main]
+    Hardening[impl/mvp-hardening]
     GH[GitHub Actions]
-    Play[Google Play]
-    App[Invite Android app]
   end
 
-  subgraph Identity[Managed identity]
-    Firebase[Firebase Authentication\ninvite-someone-app]
-    Google[Google OAuth / Credential Manager]
+  subgraph Distribution[Android distribution]
+    Play[Google Play]
+    App[Invite Android]
+  end
+
+  subgraph Identity[Identity]
+    Google[Google Credential Manager / OAuth]
+    Firebase[Firebase Authentication]
   end
 
   subgraph Staging[Firebase staging]
-    StagingAPI[Render\ninvite-someone-api-firebase-e2e]
-    StagingDB[(MongoDB Atlas\ninvite_firebase_e2e)]
+    StageAPI[Render: invite-someone-api-firebase-e2e]
+    StageDB[(MongoDB: invite_firebase_e2e)]
   end
 
-  subgraph Production[Production - not cut over]
-    ProdAPI[Render\ninvite-someone-api]
-    ProdDB[(MongoDB Atlas\ninvite_someone)]
+  subgraph Production[Production - operational cutover not performed]
+    ProdAPI[Render: invite-someone-api]
+    ProdDB[(MongoDB: invite_someone)]
   end
 
-  GH -->|signed AAB| Play
+  Main --> GH
+  Hardening --> GH
+  GH -->|release workflow only| Play
   Play -->|Play App Signing| App
   App --> Google
   Google --> Firebase
-  App -->|Firebase ID token| StagingAPI
-  StagingAPI --> StagingDB
-  App -. production client after explicit promotion .-> ProdAPI
+  Firebase -->|managed session / ID token| App
+  App -->|HTTPS + bearer token| StageAPI
+  StageAPI --> StageDB
+  App -. future production client .-> ProdAPI
   ProdAPI --> ProdDB
 ```
 
-Firebase supplies identity and sessions only. The Express API remains the authorization/business-rule boundary and MongoDB remains authoritative for Invite domain data.
+Firebase owns authentication/session identity. The Express API owns authorization and Invite business rules. MongoDB owns Invite domain data.
 
-## Environment inventory
+## Source branches
 
-| Environment | Branch/source | Render service | Public API | Auth mode | MongoDB database | Auto deploy | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Firebase staging/E2E | `impl/firebase-auth` | `invite-someone-api-firebase-e2e` | `https://invite-someone-api-firebase-e2e.onrender.com` | `firebase` | `invite_firebase_e2e` | off | active test environment |
-| Production | `main` | `invite-someone-api` | `https://invite-someone-api.onrender.com` | compatibility/internal until explicit cutover | `invite_someone` | off | live; unchanged during staging work |
-| Historical dev | `main` | `invite-someone-api-clerk-dev` | `https://invite-someone-api-clerk-dev.onrender.com` | historical development use | non-production | off | not part of the target Firebase release path |
+### `main`
 
-All three Render services currently run in Virginia on Render's free web-service plan, use Node runtime, build with `npm ci`, and start with `npm run server:start`.
-
-The repository also contains a portable `Dockerfile` based on Node 22.13 Alpine. Render currently uses its Node runtime rather than the Dockerfile; the Docker image is retained as the portability path for a future Cloud Run migration.
-
-## Current deployed revisions
-
-Deployment state and Git branch state are intentionally separate because Render auto-deploy is disabled.
-
-- **Firebase staging branch last functionally validated SHA before documentation-only changes:** `113efe015bfee8e531a0e477bdef33974b5d30ff`.
-- **Firebase staging Render live deploy:** `ea14d8105e2d09da6aebdd9ff4f272636c7d749a` (`docs: clarify Firebase server bootstrap variables`).
-- **Production `main` head before this documentation refresh:** `b5f2c59c4b24939fb8f8459ffcc008bd048dc7d6`.
-- **Production Render live deploy:** `d050cca0dae894159ec3e54f8476f82655f9b1a2`.
-
-A newer branch head does not imply that Render has deployed it. Always verify the Render deploy revision before attributing backend behavior to a Git commit.
-
-## Render deployment model
-
-### Firebase staging
-
-`invite-someone-api-firebase-e2e` is deliberately manual:
+Firebase migration source was promoted to `main` at:
 
 ```text
-branch: impl/firebase-auth
+4fa69eeb19c336603a5e6ea1470b24d75150a376
+```
+
+This source promotion did **not** deploy production Render and did **not** switch the live production API to Firebase authentication.
+
+### `impl/mvp-hardening`
+
+This branch contains the active MVP-hardening work after the Firebase source promotion. Work includes managed-auth state hardening, Android/Firebase quality gates, design-system improvements, user help/safety content, and MVP documentation.
+
+The exact branch HEAD changes as hardening commits land; always query GitHub before using a SHA as release evidence.
+
+No PR is required for this project workflow. Promotion to `main` must still be explicit and must not be confused with deployment.
+
+## Live environment inventory
+
+| Environment | Live compute | API | Auth mode | MongoDB | Auto deploy | Operational status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Firebase staging/E2E | Render `invite-someone-api-firebase-e2e` | `https://invite-someone-api-firebase-e2e.onrender.com` | `firebase` | `invite_firebase_e2e` | off | active isolated staging backend |
+| Production | Render `invite-someone-api` | `https://invite-someone-api.onrender.com` | compatibility/internal until explicit cutover | `invite_someone` | off | live and intentionally unchanged |
+
+Historical Render services may still exist, but they are not part of the target MVP release path unless explicitly documented in `CURRENT_STATUS.md`.
+
+## Known live revisions
+
+Last verified before the current hardening branch work:
+
+```text
+Firebase staging Render:
+  ea14d8105e2d09da6aebdd9ff4f272636c7d749a
+
+Production Render:
+  d050cca0dae894159ec3e54f8476f82655f9b1a2
+```
+
+These values are historical checkpoints, not permanent truth. Re-read Render immediately before any staging or production deployment decision.
+
+The most important deployment invariant is:
+
+```text
+Git branch HEAD != Render live revision
+```
+
+unless a deliberate deployment has been performed and verified.
+
+## Render model
+
+Both staging and production use manual deployment.
+
+Typical runtime contract:
+
+```text
 auto deploy: off
 build: npm ci
 start: npm run server:start
+health: /health
+```
+
+### Staging
+
+```text
 AUTH_MODE=firebase
 FIREBASE_PROJECT_ID=invite-someone-app
 MONGODB_DB_NAME=invite_firebase_e2e
 MONGODB_ENSURE_INDEXES_ON_START=false during normal operation
 ```
 
-The MongoDB URI and database credentials stay in Render/Atlas. They must never be copied into Expo public variables, GitHub logs, documentation, or mobile binaries.
-
-Index creation is an explicit maintenance operation (`npm run server:indexes`). `MONGODB_ENSURE_INDEXES_ON_START=true` is only a controlled bootstrap mechanism and must be returned to `false` after the expected indexes exist.
-
 ### Production
 
-`invite-someone-api` is also manual and remains isolated from Firebase staging work:
-
 ```text
-branch: main
-auto deploy: off
-health check: /health
-build: npm ci
-start: npm run server:start
 MONGODB_DB_NAME=invite_someone
+AUTH_MODE remains compatibility/internal until an explicit compatible-client cutover
 ```
 
-Production must not be switched to Firebase-only authentication while unsupported compatibility clients can still reach the API. A compatible-client rollout, minimum-version gate, or temporary compatibility strategy is required before the final auth cutover.
+Production must not be switched to Firebase-only authentication while unsupported old clients can still call the service unless a minimum-version/compatibility plan has been explicitly chosen.
 
-## Android / Google Play deployment path
+## Database maintenance
 
-The Android package is permanently:
+MongoDB credentials remain in Render/Atlas secret configuration and never belong in the mobile bundle.
+
+Index creation is explicit:
+
+```bash
+npm run server:indexes
+```
+
+`MONGODB_ENSURE_INDEXES_ON_START=true` may be used only for controlled bootstrap and should return to `false` afterward so scale-to-zero cold starts do not perform schema maintenance.
+
+## Android / Google Play path
+
+Package:
 
 ```text
 com.charifmahmoudi.invite
 ```
 
-The staging Android path is:
+Current Internal testing release:
 
-```mermaid
-flowchart LR
-  Branch[impl/firebase-auth]
-  Validate[Validate Firebase Android]
-  APK[Firebase staging APK]
-  AAB[Play upload-signed AAB]
-  WIF[GitHub OIDC -> Google WIF]
-  Publisher[Android Publisher API]
-  Track[Google Play Internal testing]
-  Device[Tester device]
-
-  Branch --> Validate
-  Validate --> APK
-  Validate --> AAB
-  Validate --> WIF
-  WIF --> Publisher
-  AAB --> Publisher
-  Publisher --> Track
-  Track -->|Play App Signing| Device
+```text
+track: internal
+release: Invite Internal 15
+versionCode: 5
+publication workflow run: 34155373675
 ```
 
-### Build/signing workflow
+VersionCode 5 remains the published Internal testing build. Do not increment it merely for documentation, CI, listing, or backend work. A future AAB release must use the next valid versionCode.
 
-`.github/workflows/validate-firebase-android.yml`:
+### Release workflow
 
-1. checks the isolated staging API;
-2. generates the Android project with Expo prebuild;
-3. validates Firebase native configuration;
-4. builds a staging APK and verifies its known staging signing certificate;
-5. builds a release AAB when Play upload signing secrets are present;
-6. verifies that the AAB is not debug-signed;
-7. authenticates to Google Cloud with short-lived GitHub OIDC credentials;
-8. uploads the bundle through the Android Publisher API;
-9. assigns it to the `internal` track with `completed` status;
-10. validates and commits the Play edit.
+`.github/workflows/validate-firebase-android.yml` is the protected build/upload path used for the Firebase staging Play release. It:
 
-The current Internal testing release contains Android `versionCode` **5**. Do not bump it merely to troubleshoot listing, tester, or installation issues. Increase it only for a genuine subsequent Play track release or when Play reports a version-code collision for a new upload.
+1. checks isolated staging API health;
+2. runs Expo Android prebuild;
+3. verifies generated Firebase configuration;
+4. builds and checks a staging APK;
+5. builds an upload-key-signed AAB when signing secrets are present;
+6. rejects debug-signed release bundles;
+7. obtains short-lived Google credentials through Workload Identity Federation;
+8. uses the Android Publisher API to upload and assign the AAB to Internal testing;
+9. validates and commits the Play edit.
 
-### Google Cloud / Play CI trust
+MVP hardening does **not** automatically run this publication workflow merely because source changes. Publishing a new AAB is a release decision.
 
-CI uses keyless federation:
+## MVP quality path
+
+`.github/workflows/mvp-quality.yml` is intentionally separate from Play publication.
+
+It is designed to run for `main`, `impl/mvp-hardening`, PRs targeting `main`, and manual dispatch. It contains:
+
+### Firebase -> API boundary
+
+- creates a disposable genuine Firebase identity;
+- verifies the isolated Firebase staging API accepts the token boundary;
+- proves an unmapped identity gets `INVITE_PROFILE_REQUIRED`;
+- proves unverified provisioning gets `VERIFIED_EMAIL_REQUIRED`;
+- deletes the disposable Firebase identity.
+
+### Android managed-auth + core navigation
+
+- builds a Firebase-enabled Android release APK;
+- uses API 35 / Pixel 6 emulator;
+- uses KVM when the runner exposes `/dev/kvm`, otherwise permits software fallback;
+- runs a real Firebase invalid-credential UI journey;
+- runs a clean-state demo/core navigation journey;
+- retains Maestro evidence.
+
+This workflow:
+
+```text
+DOES NOT deploy Render
+DOES NOT modify MongoDB configuration
+DOES NOT publish to Google Play
+DOES NOT bump Android versionCode
+```
+
+## Google Cloud / Play CI trust
+
+Release automation uses keyless GitHub OIDC federation:
 
 ```text
 Google Cloud project: invite-someone-app
 project number: 367720887571
 service account: invite-play-ci@invite-someone-app.iam.gserviceaccount.com
-Workload Identity Provider:
+provider:
 projects/367720887571/locations/global/workloadIdentityPools/github-actions/providers/github
-OAuth scope: https://www.googleapis.com/auth/androidpublisher
 ```
 
-No service-account JSON key is required in GitHub.
-
-The Play upload keystore is separate from Google Cloud authentication. It is provided to GitHub Actions only through repository secrets:
+Android Publisher OAuth scope:
 
 ```text
-PLAY_UPLOAD_KEYSTORE_BASE64
-PLAY_UPLOAD_STORE_PASSWORD
-PLAY_UPLOAD_KEY_ALIAS
-PLAY_UPLOAD_KEY_PASSWORD
+https://www.googleapis.com/auth/androidpublisher
 ```
 
-Never commit the upload keystore or any password/private key.
+No Google service-account private JSON key is required in GitHub.
+
+The Play upload keystore is separate from cloud authentication and is supplied only through protected repository secrets. Never commit or document private key bytes/passwords.
 
 ## Android signing identities
 
-These identities must not be conflated:
-
-| Channel | Certificate role | Current SHA-1 | Firebase/Google OAuth use |
+| Channel | Role | SHA-1 | OAuth significance |
 | --- | --- | --- | --- |
-| GitHub staging/test APK | direct APK installation / emulator validation | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` | register when testing that APK |
-| Play upload key | authenticates AAB uploads to Play | `96:55:A1:7E:35:C7:CF:DE:67:BD:3C:E9:6C:F5:22:73:99:F8:06:A3` | not the installed Play identity |
-| Play App Signing | signs APKs delivered to testers/users | `44:A2:72:01:D0:13:DE:A3:79:D1:41:92:67:6C:52:89:20:10:E6:56` | required for Play-delivered Google Sign-In |
+| repository/test APK | direct APK/emulator signing identity | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` | required only for that direct APK path |
+| Play upload key | authenticates AAB upload | `96:55:A1:7E:35:C7:CF:DE:67:BD:3C:E9:6C:F5:22:73:99:F8:06:A3` | not the identity installed by users |
+| Play App Signing | signs Play-delivered app | `44:A2:72:01:D0:13:DE:A3:79:D1:41:92:67:6C:52:89:20:10:E6:56` | required for Google Sign-In in Play-installed builds |
 
-Play App Signing SHA-256 currently recorded for operational verification:
+Recorded Play App Signing SHA-256:
 
 ```text
 31:9F:DF:AD:0E:50:77:AA:FB:46:2C:97:35:2F:5A:BA:15:69:E9:3E:27:C3:48:BF:35:C2:67:D8:36:4E:C4:98
 ```
 
-These fingerprints are public certificate identifiers, not private signing material.
+Certificate fingerprints are public identifiers; private signing material must remain secret.
 
-## Play store-listing automation
+## Play listing state
 
-The Android Publisher API is also used for listing maintenance. Current API-managed listing state has been verified with:
+The listing has the required API-managed basics:
 
-- app title present;
-- short description present;
-- full description present;
-- public support email present;
-- 512x512 Play Store icon present;
-- 1024x500 feature graphic present;
-- two 1080x2400 phone screenshots present.
+- title;
+- short/full descriptions;
+- support email;
+- icon;
+- feature graphic;
+- two phone screenshots.
 
-`.github/workflows/play-store-screenshots.yml` launches a hardware-accelerated API 35 Pixel 6 emulator, installs a verified staging APK, captures real Invite screens, retains them as evidence, uploads them to the `en-US` Play listing, commits the Play edit, and verifies that Play reports at least two phone screenshots.
+The two existing screenshots were captured from the real staging app, but later review of the retained evidence found a visible Android system `Quickstep isn't responding` dialog over both images. They must therefore be treated as **technically uploaded but creatively unacceptable**.
 
-The screenshot workflow currently pins a specific verified APK artifact ID. When a new staging APK becomes the release candidate, update that pin or replace it with commit-aware artifact discovery before publishing replacement screenshots.
+The hardening capture script rejects screenshots when an Android ANR/error dialog remains visible. Regenerating clean listing screenshots is a release-presentation task; it does not require a new AAB by itself when the intended app build is unchanged.
 
-## Current Play distribution state
+## Current physical distribution evidence
 
-- Internal testing release is committed and available to the configured tester list.
-- The tester opt-in page recognizes the enrolled tester account and exposes **Download test app**.
-- Google Play shows an Install button for the unreviewed test build.
-- **The current Play-delivered build installs successfully on the physical test phone and the application runs on that device.**
-- Play visibility, eligibility, delivery, installation, and launch are therefore working.
-- The release owner has explicitly **waived the full Play-installed functional acceptance suite** for this release candidate.
+Verified:
 
-The waiver must be represented accurately: the suite is **not passed**; it is **not executed**. Existing CI, emulator, hosted Firebase-token, API, and MongoDB evidence remains valid for what those layers tested, but does not constitute proof of the skipped physical-device journeys.
+- tester enrollment works;
+- opt-in/download path works;
+- Internal testing build is visible;
+- Play-delivered versionCode 5 installs successfully on the physical test phone;
+- Invite launches/runs on that phone.
 
-Internal testing can operate before the app is fully configured for public production. Console-only App content/policy declarations and production-access requirements remain separate from internal-test distribution.
+The release owner explicitly waived the earlier full Play-installed functional suite. Therefore those unexecuted journeys remain **waived/not passed**. See [TESTING.md](./TESTING.md) for the exact list.
 
-## Secret and configuration boundaries
+## Secret boundaries
 
-### Safe to ship in the client
+### Public client configuration
 
-The following are public client configuration, not secrets:
+Safe to embed by design:
 
-- Firebase Web API key/config;
+- Firebase public Web/app configuration;
 - Firebase project ID;
 - OAuth client IDs;
-- public API URL;
+- public HTTPS API URL;
 - package/bundle identifiers;
-- signing certificate fingerprints.
+- certificate fingerprints.
 
-### Server-only / secret
+### Secret / server-only
 
-Keep these only in their appropriate secret stores:
+Never place in public app config, documentation, or build logs:
 
 - MongoDB URI/password;
-- Play upload keystore and passwords;
-- signing private keys;
+- signing private keys/keystores/passwords;
 - OAuth client secrets;
-- Firebase service-account private keys if a future feature ever requires them;
-- live Firebase ID tokens;
-- any production-only administrative credential.
+- service-account private keys;
+- live Firebase ID/refresh tokens;
+- password-reset links;
+- production administrative credentials.
 
-## Promotion and production cutover
+## Promotion model
 
-The current release path is:
+Source and infrastructure have separate gates.
 
-```text
-staging CI
-  -> hosted Firebase boundary smoke
-  -> Play Internal testing publication
-  -> Play installation + launch on real device [passed]
-  -> full Play-installed functional acceptance suite [WAIVED; NOT PASSED]
-  -> Play production-readiness / closed-test requirements as applicable
-  -> re-check exact branch and Render revisions
-  -> explicit fast-forward of intended staging code to main
-  -> deploy/verify compatible production client path
-  -> explicit production Render auth cutover
-```
+### Source promotion
 
-The skipped suite means the following Play-installed behaviors remain unverified on the physical tester device: email/password signup and verification, returning sign-in, password reset, Google Sign-In, onboarding/profile provisioning, Firebase token -> Express -> MongoDB end-to-end behavior, session persistence, logout, duplicate-identity protection in the Play-installed flow, `ACCOUNT_LINK_REQUIRED` in the Play-installed flow, background/sleep behavior, network recovery, and reinstall/update behavior.
+A future `impl/mvp-hardening` -> `main` promotion should occur only after the intended candidate SHA has green required checks and the documentation accurately records known gaps/waivers.
 
-Those items must not be recorded as passed later unless they are actually tested. Production promotion may proceed only as an explicit release-owner decision that accepts this residual risk; it must not be inferred from the waiver alone.
+This operation still does **not** deploy production.
+
+### Staging backend deployment
+
+If hardening requires a changed staging API binary:
+
+1. identify exact candidate SHA;
+2. manually deploy that revision to `invite-someone-api-firebase-e2e`;
+3. verify Render reports that exact revision;
+4. verify `/health`;
+5. run hosted Firebase/API and relevant Android E2E;
+6. record the new live staging revision.
+
+### Production cutover
+
+Production remains an explicit future operation:
+
+1. select exact `main` SHA;
+2. re-read production Render current revision/config;
+3. confirm client/server auth compatibility strategy;
+4. confirm database/index state;
+5. define rollback revision and compatibility behavior;
+6. manually deploy the intended server revision;
+7. verify Render reports the exact deployed SHA;
+8. verify `/health` and production smoke behavior;
+9. only then change auth mode or production distribution as explicitly planned.
+
+No production cutover has been performed by the MVP-hardening work documented here.
 
 ## Rollback principles
 
-Before production cutover, rollback is simply **do not promote staging**; production remains independent.
-
-After a future production cutover:
-
-1. preserve the last known-good production client/version;
-2. preserve the previous Render deployment revision;
-3. do not mutate identity mappings to work around an auth incident;
-4. prefer restoring a compatible server/client pair over silently linking accounts;
-5. verify `/health`, authentication, and a read-only smoke before reopening normal traffic;
-6. never roll back database schema by deleting user identity mappings without a migration plan.
+- Before production cutover: leave production unchanged.
+- After a future cutover: preserve the previous known-good Render revision/client pairing.
+- Never “repair” an auth incident by silently creating email-based identity mappings.
+- Prefer restoring a compatible client/server pair over mutating identity ownership.
+- Never delete identity mappings or user data as an ad-hoc rollback strategy.
+- Verify read-only health/auth behavior before reopening normal traffic after rollback.
 
 ## Operational ownership
 
-- **GitHub**: source, CI, Android build artifacts, release evidence.
-- **Google Cloud IAM**: keyless GitHub-to-Play federation.
-- **Google Play**: test/production distribution, Play App Signing, store listing.
-- **Firebase Authentication**: managed identity and sessions.
-- **Render**: stateless Express compute.
-- **MongoDB Atlas**: durable Invite domain data.
+- **GitHub** — source, CI, Android artifacts, evidence.
+- **Google Cloud IAM** — GitHub-to-Play keyless trust.
+- **Google Play** — distribution, Play App Signing, store listing.
+- **Firebase Authentication** — user identity/session provider.
+- **Render** — stateless Express compute.
+- **MongoDB Atlas** — durable Invite domain/identity-mapping data.
 
-The architecture deliberately avoids storing one provider's private credentials inside another provider's public client configuration.
+The architecture intentionally keeps private credentials out of the mobile client and keeps source promotion independent from live infrastructure mutation.
