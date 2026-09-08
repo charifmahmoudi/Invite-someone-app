@@ -50,22 +50,26 @@ npx expo run:ios
 
 The iOS command requires macOS. EAS profiles for cloud development, preview, and production builds are included in [eas.json](./eas.json).
 
-## Installable builds
+## Installable builds and Google Play
 
-Every change to `main` runs [the mobile preview workflow](./.github/workflows/mobile-preview.yml). It creates a standalone Android release-variant APK, verifies that the JavaScript bundle is embedded, records its SHA-256 checksum, and publishes both files to the `v1.0.0-preview.4` GitHub prerelease. The preview APK uses Android's development signing key and is intended for direct device testing, not Play Store submission.
+Changes to `main` continue to use the compatibility mobile-preview path. Firebase migration/release testing happens on `impl/firebase-auth`.
 
-The default preview remains on the compatibility API until a Firebase-enabled client and API are deliberately cut over together.
+The [Validate Firebase Android workflow](./.github/workflows/validate-firebase-android.yml) validates the isolated Firebase API, generates the Android native project, builds a staging APK, verifies its certificate, builds a protected upload-key-signed AAB, authenticates to Google Cloud through Workload Identity Federation, and publishes the bundle to Google Play Internal testing.
 
-Firebase migration testing uses the on-demand [Validate Firebase Android workflow](./.github/workflows/validate-firebase-android.yml). It targets the isolated Firebase E2E API, checks the hosted API boundary, builds the native Firebase/Google-enabled APK, verifies its signing certificate, and uploads the `invite-firebase-android-e2e` artifact. Use the [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md) for emulator-first acceptance and the short final phone smoke.
+Current Play staging state:
 
-The EAS `preview` profile also produces an APK when an authenticated Expo account is used:
-
-```bash
-npx eas-cli init
-npx eas-cli build --platform android --profile preview
+```text
+Package: com.charifmahmoudi.invite
+Track: internal
+Release: Invite Internal 15
+Android versionCode: 5
 ```
 
-An installable iPhone IPA must be signed with an Apple Developer certificate and provisioning profile.
+Google Play tester enrollment and release visibility are working. The current remaining delivery issue is a generic Play Store error after tapping Install on the physical tester device, so the Play-delivered acceptance suite has not yet passed.
+
+The [Play Store Screenshots workflow](./.github/workflows/play-store-screenshots.yml) boots a hardware-accelerated Android emulator, installs the verified staging APK, captures real Invite screens, publishes them to the Play listing, and verifies the listing contains at least two phone screenshots.
+
+See [Current status](./docs/CURRENT_STATUS.md), [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md), and [Google Play testing](./docs/GOOGLE_PLAY_TESTING.md) before changing signing, versionCode, testers, or production infrastructure.
 
 ## Try the complete demo
 
@@ -93,13 +97,31 @@ Firebase is an identity provider only. MongoDB remains authoritative for profile
 
 The Express API maps each Firebase UID to an internal Invite user ID, so authentication-provider IDs do not leak throughout the domain model.
 
-See [Current status](./docs/CURRENT_STATUS.md), [Architecture](./docs/ARCHITECTURE.md), [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md), and the [Firebase operations runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md).
+Current deployment separation:
+
+```text
+Firebase staging
+  impl/firebase-auth
+  -> Render invite-someone-api-firebase-e2e
+  -> MongoDB invite_firebase_e2e
+  -> Google Play Internal testing
+
+Production (not cut over)
+  main
+  -> Render invite-someone-api
+  -> MongoDB invite_someone
+  -> compatibility/internal auth until explicit production cutover
+```
+
+Render auto-deploy is disabled for staging and production. Git branch HEAD and live Render deployment revision must be checked independently.
+
+See [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md) for the complete environment, CI/CD, signing, secret-boundary, promotion and rollback model.
 
 ## Connect MongoDB and the API
 
 Invite uses the Express/MongoDB API whenever `EXPO_PUBLIC_API_URL` is set. The phone never connects directly to MongoDB: APK and IPA files can be inspected, so embedding a database username/password would expose the database.
 
-For compatibility/internal auth, see [MongoDB backend setup](./docs/MONGODB_BACKEND.md). For the target managed-auth configuration, set the API to `AUTH_MODE=firebase` and follow [FIREBASE_AUTH_SETUP.md](./docs/FIREBASE_AUTH_SETUP.md).
+For compatibility/internal auth, see [MongoDB backend setup](./docs/MONGODB_BACKEND.md). For the managed-auth configuration, set the API to `AUTH_MODE=firebase` and follow [FIREBASE_AUTH_SETUP.md](./docs/FIREBASE_AUTH_SETUP.md).
 
 The API protects every mutation with server authorization, removes private auth/email fields from public profile responses, uses coarse geospatial discovery, and performs invitation acceptance plus attendance in a MongoDB transaction.
 
@@ -117,9 +139,9 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
 EXPO_PUBLIC_FIREBASE_APP_ID=1:123456789:web:example
 ```
 
-Android Google sign-in is configured natively with `google-services.json`, a Web OAuth client for ID-token issuance, and a Google OAuth **Android** client registered for `com.charifmahmoudi.invite` plus the certificate SHA-1 used to sign that build. Android does not require an OAuth client secret or `EXPO_PUBLIC_GOOGLE_*` variables.
+Android Google sign-in is configured natively with `google-services.json`, a Web OAuth client for ID-token issuance, and a Google OAuth **Android** client registered for `com.charifmahmoudi.invite` plus the certificate SHA-1 used to sign the installed build. Android does not require an OAuth client secret or `EXPO_PUBLIC_GOOGLE_*` variables.
 
-Every Android signing channel can have a different SHA-1. The staging/development APK fingerprint must not be assumed to equal Internal App Sharing or Google Play App Signing fingerprints.
+Every Android signing channel can have a different SHA-1. The direct staging APK, Play upload key, and Play App Signing certificate are separate identities. A Google Play-installed build uses the **Play App Signing** certificate for Google OAuth matching.
 
 Never put MongoDB credentials, OAuth client secrets, Firebase service-account JSON, signing private keys, or private keys in `EXPO_PUBLIC_*` variables.
 
@@ -144,13 +166,14 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Documentation
 
-- [Current migration status](./docs/CURRENT_STATUS.md)
+- [Current migration/release status](./docs/CURRENT_STATUS.md)
+- [Deployment architecture and environment inventory](./docs/DEPLOYMENT_ARCHITECTURE.md)
 - [Product brief](./docs/PRODUCT.md)
 - [User stories and acceptance criteria](./docs/USER_STORIES.md)
-- [Architecture](./docs/ARCHITECTURE.md)
+- [Application architecture](./docs/ARCHITECTURE.md)
 - [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md)
 - [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md)
-- [Google Play testing guide](./docs/GOOGLE_PLAY_TESTING.md)
+- [Google Play testing/signing/listing guide](./docs/GOOGLE_PLAY_TESTING.md)
 - [MongoDB backend setup](./docs/MONGODB_BACKEND.md)
 - [Data model and security rules](./docs/DATA_MODEL.md)
 - [Testing strategy](./docs/TESTING.md)
@@ -159,7 +182,11 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Project status
 
-This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth` without changing the production `main` path. See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for completed work and remaining release gates. Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store production credentials remain later work.
+This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured and `versionCode 5` is visible to enrolled testers. Production `main`, the production Render service, and production MongoDB remain unchanged until the Play-installed acceptance suite passes.
+
+See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for the exact completed work and remaining release gates.
+
+Push notifications, chat, moderation operations, first-party image uploads, localization, analytics, Apple sign-in, explicit legacy-account linking, and app-store production credentials/promotion remain later work.
 
 ## License
 
