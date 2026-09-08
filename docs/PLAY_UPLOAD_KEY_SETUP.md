@@ -1,18 +1,89 @@
 # Google Play upload key setup
 
-This is the one-time signing setup required before GitHub can produce an Android App Bundle (`.aab`) that Google Play Internal testing accepts.
+_Last verified: 2026-09-08._
+
+This is the one-time signing setup used by GitHub Actions to produce Android App Bundles (`.aab`) accepted by Google Play Internal testing.
+
+The setup is already active for Invite. This document remains as the recovery/audit reference; do not regenerate or replace the current upload key unless there is an explicit operational reason.
 
 ## What this key is
 
-The **upload key** is the private key used by GitHub to sign bundles before uploading them to Google Play. Google Play App Signing then signs the APKs delivered to testers/users with Google's separate app-signing key.
+The **upload key** is the private key used to sign bundles before they are uploaded to Google Play. Google Play App Signing then signs the APKs delivered to testers/users with Google's separate app-signing key.
 
-Keep the upload keystore and passwords private. Never commit the keystore or passwords to this repository and never paste them into issues, pull requests, logs, or chat.
+These are distinct roles:
 
-## 1. Generate the upload keystore on your own computer
+```text
+Upload key -> proves an upload is authorized
+Play App Signing key -> signs APKs actually installed from Google Play
+```
 
-You need Java's `keytool`. Android Studio includes a JDK, or you can use any current JDK.
+Keep the upload keystore and passwords private. Never commit the keystore or passwords to this repository and never paste them into issues, pull requests, logs, documentation, or chat.
 
-Run:
+## Current Invite signing state
+
+Current public certificate fingerprints:
+
+```text
+Play upload SHA-1:
+96:55:A1:7E:35:C7:CF:DE:67:BD:3C:E9:6C:F5:22:73:99:F8:06:A3
+
+Play App Signing SHA-1:
+44:A2:72:01:D0:13:DE:A3:79:D1:41:92:67:6C:52:89:20:10:E6:56
+```
+
+These fingerprints are safe to document. The corresponding private key material is not.
+
+## GitHub Actions secrets
+
+The workflow expects exactly these repository **Secrets**:
+
+```text
+PLAY_UPLOAD_KEYSTORE_BASE64
+PLAY_UPLOAD_STORE_PASSWORD
+PLAY_UPLOAD_KEY_ALIAS
+PLAY_UPLOAD_KEY_PASSWORD
+```
+
+They must not be repository Variables.
+
+The current workflow checks that all four are present before building a Play AAB. If any are missing, it skips the Play bundle rather than creating a misleading debug-signed release artifact.
+
+## How the workflow uses the key
+
+`.github/workflows/validate-firebase-android.yml`:
+
+1. reconstructs the keystore only inside the ephemeral GitHub runner;
+2. injects a generated Gradle `playRelease` signing configuration;
+3. builds `app-release.aab`;
+4. verifies the AAB with `jarsigner`/`keytool`;
+5. rejects Android Debug signing;
+6. authenticates to Google Cloud using GitHub OIDC -> Workload Identity Federation;
+7. obtains a short-lived Android Publisher token;
+8. uploads the AAB to Google Play;
+9. assigns it to the Internal testing track;
+10. validates and commits the Play edit.
+
+The keystore is not uploaded as a GitHub artifact.
+
+## Current keyless Google Cloud identity
+
+The upload key signs the AAB, but Android Publisher API authentication is separate and keyless:
+
+```text
+Service account:
+invite-play-ci@invite-someone-app.iam.gserviceaccount.com
+
+Workload Identity Provider:
+projects/367720887571/locations/global/workloadIdentityPools/github-actions/providers/github
+```
+
+Do not create a long-lived service-account JSON key as a substitute.
+
+## Original key-generation procedure
+
+Use this only if a new/replacement upload key is explicitly required.
+
+On a trusted local computer with Java `keytool`:
 
 ```bash
 keytool -genkeypair -v \
@@ -23,99 +94,64 @@ keytool -genkeypair -v \
   -validity 10000
 ```
 
-When prompted:
+Choose strong passwords and back up the keystore in a secure location you control.
 
-- choose a strong keystore password;
-- use the same password for the key password if you want the simplest setup;
-- the alias must remain `invite-upload`;
-- enter your real certificate owner information when prompted.
+### Convert to Base64 locally
 
-Back up `invite-upload.jks` in a secure location you control.
-
-## 2. Convert the keystore to Base64 locally
-
-Do not upload the keystore to the public repository.
-
-### macOS
+macOS:
 
 ```bash
 base64 < invite-upload.jks | tr -d '\n' | pbcopy
 ```
 
-The Base64 value is now on your clipboard.
-
-### Linux
+Linux:
 
 ```bash
 base64 -w0 invite-upload.jks
 ```
 
-Copy the entire output.
-
-### Windows PowerShell
+Windows PowerShell:
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("invite-upload.jks")) | Set-Clipboard
 ```
 
-The Base64 value is now on your clipboard.
+Add the Base64 value/passwords as the four GitHub Actions repository Secrets above.
 
-## 3. Add GitHub Actions repository secrets
+## Do not use manual Play upload as the normal path
 
-Open the repository:
+The current release path is automated. Do not download the AAB and manually create an Internal testing release unless automation is unavailable and the manual fallback is deliberately chosen.
 
-**Settings -> Secrets and variables -> Actions -> Secrets -> New repository secret**
-
-Create exactly these four secrets:
+Normal path:
 
 ```text
-PLAY_UPLOAD_KEYSTORE_BASE64
-PLAY_UPLOAD_STORE_PASSWORD
-PLAY_UPLOAD_KEY_ALIAS
-PLAY_UPLOAD_KEY_PASSWORD
+impl/firebase-auth
+-> Validate Firebase Android
+-> upload-key-signed AAB
+-> GitHub OIDC / Google WIF
+-> Android Publisher API
+-> Google Play Internal testing
 ```
 
-Values:
+Current release evidence:
 
-- `PLAY_UPLOAD_KEYSTORE_BASE64`: the Base64 value from step 2
-- `PLAY_UPLOAD_STORE_PASSWORD`: the keystore password
-- `PLAY_UPLOAD_KEY_ALIAS`: `invite-upload`
-- `PLAY_UPLOAD_KEY_PASSWORD`: the key password (same as store password if you chose the simple setup)
-
-Do not create these as repository Variables. They must be **Secrets**.
-
-## 4. Trigger the Firebase Android workflow
-
-After all four secrets exist, run:
-
-**GitHub -> Actions -> Validate Firebase Android -> Run workflow -> branch `impl/firebase-auth`**
-
-The workflow will:
-
-1. validate Firebase staging;
-2. build and verify the existing validation APK;
-3. reconstruct the upload keystore only inside the ephemeral GitHub runner;
-4. configure Gradle release signing;
-5. build `app-release.aab`;
-6. verify that the AAB is not signed with an Android debug certificate;
-7. upload the GitHub artifact named `invite-firebase-play-release-aab`.
-
-If any signing secret is missing, the workflow intentionally skips the Play bundle and says which setup is required instead of producing a misleading debug-signed AAB.
-
-## 5. Upload to Play Internal testing
-
-Download the `invite-firebase-play-release-aab` artifact, unzip it, and upload `app-release.aab` to:
-
-**Play Console -> Invite -> Test and release -> Testing -> Internal testing -> Create/Edit release**
-
-For the first accepted bundle, follow Play's Play App Signing setup. For a new app, letting Google generate the app-signing key is the normal option.
-
-After Play accepts the first bundle, go to:
-
-**Play Console -> Invite -> Test and release / App integrity -> App signing**
-
-Copy the **App signing key certificate SHA-1** (not the upload-key SHA-1) and add it to the Firebase Android app `com.charifmahmoudi.invite`. Then download a fresh `google-services.json` and update the staging branch before relying on Google Sign-In in the Play-installed build.
+```text
+Internal testing versionCode: 5
+Release: Invite Internal 15
+Successful publication run: 34155373675
+```
 
 ## Recovery
 
-If the upload key is lost later, Google Play supports upload-key reset while Play App Signing remains intact. Still keep an encrypted backup to avoid operational delays.
+If the upload key is lost, Google Play App Signing remains separate. Use Google's upload-key reset process rather than changing the Play App Signing identity.
+
+After a legitimate upload-key reset:
+
+1. store the replacement key securely;
+2. replace all four GitHub Actions signing secrets together;
+3. verify the new upload certificate fingerprint;
+4. run the Android workflow on staging;
+5. confirm the AAB signature before allowing the Play API upload;
+6. do **not** change the Firebase Android OAuth registration merely because the upload key changed—Google Sign-In for Play-installed builds depends on the Play App Signing certificate.
+
+See [GOOGLE_PLAY_TESTING.md](./GOOGLE_PLAY_TESTING.md) and [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md) for the complete release/signing model.
