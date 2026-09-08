@@ -93,7 +93,8 @@ projects/367720887571/locations/global/workloadIdentityPools/github-actions/prov
 - No versionCode bump was required for store-listing or tester setup work.
 - Tester list **Invite Someone Alpha Testers** contains the configured tester accounts and is selected for Internal testing.
 - The tester opt-in page recognizes the active tester account and offers **Download test app**.
-- Google Play now displays the test build and an **Install** button.
+- Google Play displays the test build and an **Install** button.
+- **Play-delivered installation on the physical test phone now succeeds and the application runs on that device.**
 
 ### Play store listing
 
@@ -137,31 +138,24 @@ Play App Signing SHA-1:
 
 These are public certificate fingerprints, not private key material.
 
-## Current blocker
+## Current release gate
 
-The previous **"App not available"** tester-propagation problem is resolved.
+The previous Play delivery blockers are resolved:
 
-The tester can now reach the Play test listing and the Play Store shows the Install action. The latest physical-device install attempt fails after tapping Install with Google's generic message:
-
-```text
-Something went wrong on our end. Please try again.
-```
-
-Therefore:
-
+- the earlier **"App not available"** tester-propagation problem is resolved;
 - tester eligibility is working;
 - the Internal testing release is visible;
-- store listing/API-managed assets are no longer the blocker;
-- **physical Play installation has not yet passed the release gate**.
+- store listing/API-managed assets are complete;
+- the physical test phone can now install the Google Play-delivered build;
+- the application launches/runs on that test phone.
 
-Before changing the AAB or versionCode, first rule out a locally/sideloaded copy of `com.charifmahmoudi.invite` signed with a different certificate, clear Play Store cache if needed, and allow normal Play propagation time. Do not upload another bundle solely because of this generic install error.
+The remaining gate is **functional acceptance of the Play-installed build**. Installation success alone is not sufficient to promote the Firebase migration to production.
 
 ## Still pending
 
 These are the remaining release gates:
 
-1. Get `versionCode 5` installed successfully from Google Play Internal testing on the physical tester device.
-2. From that Play-installed build, run the complete acceptance suite:
+1. From the Play-installed `versionCode 5` build, run the complete acceptance suite:
    - launch;
    - email/password signup;
    - email verification;
@@ -178,21 +172,22 @@ These are the remaining release gates:
    - background/sleep resume;
    - network-change behavior;
    - uninstall/reinstall or Play update behavior as appropriate.
-3. Verify the resulting `members` and `user_identities` records in `invite_firebase_e2e` for the Play-installed acceptance identities.
-4. Recheck Play Console App content/policy declarations before any closed-test/production submission. Internal testing can operate before full public-production setup, so these are a separate production-readiness gate.
-5. If this Personal developer account is subject to Google's current new-account rule, complete a closed test with at least 12 testers continuously opted in for 14 days before applying for production access.
-6. Recheck exact staging and `main` branch heads after acceptance.
-7. Fast-forward only the exact accepted staging code to `main`.
-8. Confirm the intended production Render deployment and `/health` response.
-9. Distribute a compatible production client before switching the production API away from compatibility/internal auth.
-10. Perform the production auth cutover only as an explicit, reversible operation.
+2. Verify the resulting `members` and `user_identities` records in `invite_firebase_e2e` for the Play-installed acceptance identities.
+3. Recheck Play Console App content/policy declarations before any closed-test/production submission. Internal testing can operate before full public-production setup, so these are a separate production-readiness gate.
+4. If this Personal developer account is subject to Google's current new-account rule, complete a closed test with at least 12 testers continuously opted in for 14 days before applying for production access.
+5. Recheck exact staging and `main` branch heads after acceptance.
+6. Fast-forward only the exact accepted staging code to `main`.
+7. Confirm the intended production Render deployment and `/health` response.
+8. Distribute a compatible production client before switching the production API away from compatibility/internal auth.
+9. Perform the production auth cutover only as an explicit, reversible operation.
 
 ## Release path
 
 ```text
 CI + hosted auth smoke
         -> Play Internal testing publication
-        -> Play-installed physical-device acceptance
+        -> Play installation + launch on physical test phone [passed]
+        -> Play-installed functional acceptance suite
         -> MongoDB identity/invariant verification
         -> Play production-readiness / closed-test requirements as applicable
         -> recheck exact branch heads
