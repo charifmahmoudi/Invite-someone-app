@@ -10,8 +10,70 @@ adb shell pm clear "$PACKAGE" >/dev/null
 adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
 
 dump_ui() {
+  rm -f /tmp/window.xml
   adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
   adb pull /sdcard/window.xml /tmp/window.xml >/dev/null 2>&1 || true
+}
+
+node_center() {
+  local mode="$1"
+  local needle="$2"
+  python3 - "$mode" "$needle" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+mode, needle = sys.argv[1:]
+try:
+    root = ET.parse('/tmp/window.xml').getroot()
+except Exception:
+    raise SystemExit(0)
+
+for node in root.iter('node'):
+    value = {
+        'text': node.attrib.get('text', ''),
+        'desc': node.attrib.get('content-desc', ''),
+        'resource': node.attrib.get('resource-id', ''),
+    }.get(mode, '')
+    if needle in value:
+        match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds', ''))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            print(f'{(x1 + x2) // 2} {(y1 + y2) // 2}')
+            raise SystemExit
+PY
+}
+
+handle_system_anr() {
+  [[ -f /tmp/window.xml ]] || return 1
+
+  if ! grep -Fq "isn't responding" /tmp/window.xml; then
+    return 1
+  fi
+
+  # Never mask an ANR from Invite itself. A real app ANR must fail the capture.
+  if grep -Fq "Invite isn't responding" /tmp/window.xml; then
+    echo '::error title=Invite ANR::Invite itself is not responding on the capture emulator.'
+    cat /tmp/window.xml
+    return 2
+  fi
+
+  local bounds
+  bounds="$(node_center resource 'android:id/aerr_wait')"
+  if [[ -z "$bounds" ]]; then
+    bounds="$(node_center text 'Wait')"
+  fi
+  if [[ -z "$bounds" ]]; then
+    echo '::warning title=System ANR::A non-Invite Android system ANR dialog is visible but its Wait button could not be located.'
+    return 1
+  fi
+
+  local x y
+  read -r x y <<<"$bounds"
+  echo 'Non-Invite Android system ANR detected; choosing Wait and continuing capture.'
+  adb shell input tap "$x" "$y"
+  sleep 2
+  return 0
 }
 
 wait_for_text() {
@@ -22,6 +84,15 @@ wait_for_text() {
     if [[ -f /tmp/window.xml ]] && grep -Fq "$needle" /tmp/window.xml; then
       return 0
     fi
+
+    set +e
+    handle_system_anr
+    local anr_result=$?
+    set -e
+    if [[ "$anr_result" -eq 2 ]]; then
+      return 1
+    fi
+
     sleep 1
   done
   echo "::error title=Android UI timeout::Could not find text: $needle"
@@ -33,31 +104,26 @@ tap_visible_text() {
   local needle="$1"
   for attempt in 1 2 3 4 5 6; do
     dump_ui
-    BOUNDS="$(python3 - "$needle" <<'PY'
-import re
-import sys
-import xml.etree.ElementTree as ET
 
-needle = sys.argv[1]
-try:
-    root = ET.parse('/tmp/window.xml').getroot()
-except Exception:
-    raise SystemExit(0)
+    set +e
+    handle_system_anr
+    local anr_result=$?
+    set -e
+    if [[ "$anr_result" -eq 2 ]]; then
+      return 1
+    elif [[ "$anr_result" -eq 0 ]]; then
+      continue
+    fi
 
-for node in root.iter('node'):
-    text = node.attrib.get('text', '')
-    desc = node.attrib.get('content-desc', '')
-    if needle in text or needle in desc:
-        match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds', ''))
-        if match:
-            x1, y1, x2, y2 = map(int, match.groups())
-            print(f'{(x1 + x2) // 2} {(y1 + y2) // 2}')
-            raise SystemExit
-PY
-)"
-    if [[ -n "$BOUNDS" ]]; then
-      read -r X Y <<<"$BOUNDS"
-      adb shell input tap "$X" "$Y"
+    local bounds
+    bounds="$(node_center text "$needle")"
+    if [[ -z "$bounds" ]]; then
+      bounds="$(node_center desc "$needle")"
+    fi
+    if [[ -n "$bounds" ]]; then
+      local x y
+      read -r x y <<<"$bounds"
+      adb shell input tap "$x" "$y"
       return 0
     fi
     adb shell input swipe 540 1850 540 650 450
