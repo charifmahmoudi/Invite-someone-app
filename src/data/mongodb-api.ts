@@ -4,10 +4,13 @@ import { Platform } from 'react-native';
 
 import type {
   Activity,
+  ActivityDraft,
   AppData,
   Invitation,
   InvitationStatus,
   Profile,
+  SafetyReportDraft,
+  SafetyReportReceipt,
   SignInInput,
   SignUpInput,
 } from '@/types/domain';
@@ -208,8 +211,8 @@ export const provisionMongoIdentity = (input: IdentityProvisionInput) =>
     body: JSON.stringify(input),
   });
 
-// Compatibility bootstrap used by the current AppProvider. New screens should
-// migrate toward the resource-oriented page helpers below.
+// Compatibility bootstrap used by the current AppProvider. It is now served by
+// the resource router so lifecycle and block visibility rules are applied centrally.
 export const loadMongoData = () => request<AppData>('/v1/data');
 
 export const loadMongoMe = () => request<Profile>('/v1/me');
@@ -242,6 +245,8 @@ export const loadMongoInvitationsPage = (
 export const loadMongoSavedPage = (cursor?: string, limit = 20) =>
   request<ApiPage<string>>(`/v1/saved${queryString({ cursor, limit })}`);
 
+export const loadMongoBlockedProfiles = () => request<Profile[]>('/v1/blocks');
+
 export const updateMongoProfile = (profile: Profile) =>
   request<Profile>('/v1/profile', {
     method: 'PUT',
@@ -250,6 +255,20 @@ export const updateMongoProfile = (profile: Profile) =>
 
 export const createMongoActivity = (activity: Activity) =>
   request<Activity>('/v1/activities', { method: 'POST', body: JSON.stringify(activity) });
+
+export const updateMongoActivity = (activityId: string, draft: ActivityDraft) =>
+  request<Activity>(`/v1/activities/${encodeURIComponent(activityId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(draft),
+  });
+
+export const cancelMongoActivity = (activityId: string) =>
+  request<void>(`/v1/activities/${encodeURIComponent(activityId)}`, { method: 'DELETE' });
+
+export const leaveMongoActivity = (activityId: string) =>
+  request<void>(`/v1/activities/${encodeURIComponent(activityId)}/attendees/me`, {
+    method: 'DELETE',
+  });
 
 export const createMongoInvitations = (invitations: Invitation[]) =>
   request<Invitation[]>('/v1/invitations', {
@@ -274,4 +293,16 @@ export const joinMongoActivity = (activityId: string) =>
 export const setMongoActivitySaved = (activityId: string, saved: boolean) =>
   request<void>(`/v1/saved-activities/${encodeURIComponent(activityId)}`, {
     method: saved ? 'PUT' : 'DELETE',
+  });
+
+export const blockMongoProfile = (profileId: string) =>
+  request<void>(`/v1/people/${encodeURIComponent(profileId)}/block`, { method: 'PUT' });
+
+export const unblockMongoProfile = (profileId: string) =>
+  request<void>(`/v1/people/${encodeURIComponent(profileId)}/block`, { method: 'DELETE' });
+
+export const createMongoSafetyReport = (draft: SafetyReportDraft) =>
+  request<SafetyReportReceipt>('/v1/reports', {
+    method: 'POST',
+    body: JSON.stringify(draft),
   });
