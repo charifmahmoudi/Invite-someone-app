@@ -68,7 +68,12 @@ function PreferencesFields({
         <Text style={styles.sectionHint}>Choose at least two</Text>
         <View style={styles.chips}>
           {ACTIVITY_CATEGORIES.map((category) => (
-            <ChoiceChip key={category} label={category} onPress={() => setInterests((current) => toggleValue(current, category))} selected={interests.includes(category)} />
+            <ChoiceChip
+              key={category}
+              label={category}
+              onPress={() => setInterests((current) => toggleValue(current, category))}
+              selected={interests.includes(category)}
+            />
           ))}
         </View>
       </View>
@@ -76,7 +81,12 @@ function PreferencesFields({
         <Text style={styles.sectionTitle}>I’m usually free</Text>
         <View style={styles.chips}>
           {AVAILABILITY_OPTIONS.map((option) => (
-            <ChoiceChip key={option} label={option} onPress={() => setAvailability((current) => toggleValue(current, option))} selected={availability.includes(option)} />
+            <ChoiceChip
+              key={option}
+              label={option}
+              onPress={() => setAvailability((current) => toggleValue(current, option))}
+              selected={availability.includes(option)}
+            />
           ))}
         </View>
       </View>
@@ -84,7 +94,12 @@ function PreferencesFields({
         <Text style={styles.sectionTitle}>I’m looking for</Text>
         <View style={styles.chips}>
           {CONNECTION_GOALS.map((goal) => (
-            <ChoiceChip key={goal} label={goal} onPress={() => setConnectionGoals((current) => toggleValue(current, goal))} selected={connectionGoals.includes(goal)} />
+            <ChoiceChip
+              key={goal}
+              label={goal}
+              onPress={() => setConnectionGoals((current) => toggleValue(current, goal))}
+              selected={connectionGoals.includes(goal)}
+            />
           ))}
         </View>
       </View>
@@ -126,7 +141,14 @@ function FirebaseOnboardingScreen() {
     return () => {
       active = false;
     };
-  }, [emailVerified, identityLoaded, identitySignedIn, refreshInviteSession, router, verificationRevision]);
+  }, [
+    emailVerified,
+    identityLoaded,
+    identitySignedIn,
+    refreshInviteSession,
+    router,
+    verificationRevision,
+  ]);
 
   const register = async () => {
     const email = registrationEmail.trim();
@@ -177,7 +199,9 @@ function FirebaseOnboardingScreen() {
       await reload(current);
       const refreshed = firebaseAuth?.currentUser;
       if (!refreshed?.emailVerified) {
-        setFormError('Your email is not verified yet. Open the Firebase email link, then try again.');
+        setFormError(
+          'Your email is not verified yet. Open the Firebase email link, then try again.',
+        );
         return;
       }
       await refreshed.getIdToken(true);
@@ -211,24 +235,38 @@ function FirebaseOnboardingScreen() {
 
   const submit = async () => {
     if (interests.length < 2) return setFormError('Choose at least two interests.');
-    if (availability.length < 1) return setFormError('Choose at least one time when you are usually free.');
-    if (connectionGoals.length < 1) return setFormError('Choose at least one kind of connection you are looking for.');
+    if (availability.length < 1)
+      return setFormError('Choose at least one time when you are usually free.');
+    if (connectionGoals.length < 1)
+      return setFormError('Choose at least one kind of connection you are looking for.');
 
     setFormError(undefined);
     setBusy(true);
     try {
-      await provisionMongoIdentity({ name: name.trim(), city: city.trim(), interests, availability, connectionGoals });
+      await provisionMongoIdentity({
+        name: name.trim(),
+        city: city.trim(),
+        interests,
+        availability,
+        connectionGoals,
+      });
       refreshInviteSession();
       router.replace('/');
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Unable to create your Invite profile.');
+      setFormError(
+        error instanceof Error ? error.message : 'Unable to create your Invite profile.',
+      );
     } finally {
       setBusy(false);
     }
   };
 
   if (!identityLoaded || (identitySignedIn && emailVerified && !profileCheckComplete)) {
-    return <View style={styles.loading}><ActivityIndicator color={palette.primary} /></View>;
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={palette.primary} />
+      </View>
+    );
   }
 
   if (!identitySignedIn || !user) {
@@ -238,15 +276,51 @@ function FirebaseOnboardingScreen() {
         <View style={styles.content} testID="auth-registration">
           <View style={styles.heading}>
             <Text style={styles.title}>Create your Invite account.</Text>
-            <Text style={styles.subtitle}>Firebase securely handles your email, password, verification, and password resets.</Text>
+            <Text style={styles.subtitle}>
+              Firebase securely handles your email, password, verification, and password resets.
+            </Text>
           </View>
           <View style={styles.form}>
-            <InputField autoCapitalize="none" autoComplete="email" keyboardType="email-address" label="Email" onChangeText={setRegistrationEmail} placeholder="you@example.com" testID="auth-email" value={registrationEmail} />
-            <InputField autoCapitalize="none" autoComplete="new-password" hint="At least 8 characters" label="Password" onChangeText={setRegistrationPassword} onSubmitEditing={() => void register()} placeholder="Create a password" secureTextEntry testID="auth-password" value={registrationPassword} />
+            <InputField
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              label="Email"
+              onChangeText={setRegistrationEmail}
+              placeholder="you@example.com"
+              testID="auth-email"
+              value={registrationEmail}
+            />
+            <InputField
+              autoCapitalize="none"
+              autoComplete="new-password"
+              hint="At least 8 characters"
+              label="Password"
+              onChangeText={setRegistrationPassword}
+              onSubmitEditing={() => void register()}
+              placeholder="Create a password"
+              secureTextEntry
+              testID="auth-password"
+              value={registrationPassword}
+            />
           </View>
-          {formError ? <Text accessibilityRole="alert" style={styles.error} testID="auth-error">{formError}</Text> : null}
-          <Button label="Create account" loading={busy} onPress={() => void register()} testID="auth-submit" />
-          <Button fullWidth={false} label="I already have an account" onPress={() => router.replace('/(auth)/sign-in')} variant="ghost" />
+          {formError ? (
+            <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
+              {formError}
+            </Text>
+          ) : null}
+          <Button
+            label="Create account"
+            loading={busy}
+            onPress={() => void register()}
+            testID="auth-submit"
+          />
+          <Button
+            fullWidth={false}
+            label="I already have an account"
+            onPress={() => router.replace('/(auth)/sign-in')}
+            variant="ghost"
+          />
         </View>
       </ScrollScreen>
     );
@@ -259,12 +333,34 @@ function FirebaseOnboardingScreen() {
         <View style={styles.content} testID="auth-email-verification">
           <View style={styles.heading}>
             <Text style={styles.title}>Verify your email.</Text>
-            <Text style={styles.subtitle}>Firebase sent a verification link to {user.email ?? 'your email'}. Open it, then return here.</Text>
+            <Text style={styles.subtitle}>
+              Firebase sent a verification link to {user.email ?? 'your email'}. Open it, then
+              return here.
+            </Text>
           </View>
-          {formError ? <Text accessibilityRole="alert" style={styles.error} testID="auth-error">{formError}</Text> : null}
-          <Button label="I’ve verified my email" loading={busy} onPress={() => void checkVerification()} testID="auth-check-verification" />
-          <Button fullWidth={false} label="Resend verification email" onPress={() => void resendVerification()} variant="ghost" />
-          <Button fullWidth={false} label="Use a different account" onPress={() => void switchAccount()} variant="ghost" />
+          {formError ? (
+            <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
+              {formError}
+            </Text>
+          ) : null}
+          <Button
+            label="I’ve verified my email"
+            loading={busy}
+            onPress={() => void checkVerification()}
+            testID="auth-check-verification"
+          />
+          <Button
+            fullWidth={false}
+            label="Resend verification email"
+            onPress={() => void resendVerification()}
+            variant="ghost"
+          />
+          <Button
+            fullWidth={false}
+            label="Use a different account"
+            onPress={() => void switchAccount()}
+            variant="ghost"
+          />
         </View>
       </ScrollScreen>
     );
@@ -272,31 +368,76 @@ function FirebaseOnboardingScreen() {
 
   return (
     <ScrollScreen keyboardAware contentContainerStyle={styles.scroll}>
-      <ScreenHeader eyebrow={`Profile step ${step} of 2`} onBack={() => (step === 2 ? setStep(1) : router.back())} />
-      <View style={styles.progressTrack}><View style={[styles.progressFill, { width: progress }]} /></View>
+      <ScreenHeader
+        eyebrow={`Profile step ${step} of 2`}
+        onBack={() => (step === 2 ? setStep(1) : router.back())}
+      />
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: progress }]} />
+      </View>
       <View style={styles.content} testID="auth-profile-onboarding">
         {step === 1 ? (
           <>
             <View style={styles.heading}>
               <Text style={styles.title}>Identity verified. Now make Invite feel like you.</Text>
-              <Text style={styles.subtitle}>Firebase handles sign-in; these details belong to your Invite profile and matching preferences.</Text>
+              <Text style={styles.subtitle}>
+                Firebase handles sign-in; these details belong to your Invite profile and matching
+                preferences.
+              </Text>
             </View>
             <View style={styles.form}>
-              <InputField autoComplete="name" label="Name" onChangeText={setName} placeholder="How people should know you" testID="profile-name" value={name} />
-              <InputField autoComplete="off" label="City" onChangeText={setCity} onSubmitEditing={continueToPreferences} placeholder="Where do you want to meet people?" testID="profile-city" value={city} />
+              <InputField
+                autoComplete="name"
+                label="Name"
+                onChangeText={setName}
+                placeholder="How people should know you"
+                testID="profile-name"
+                value={name}
+              />
+              <InputField
+                autoComplete="off"
+                label="City"
+                onChangeText={setCity}
+                onSubmitEditing={continueToPreferences}
+                placeholder="Where do you want to meet people?"
+                testID="profile-city"
+                value={city}
+              />
             </View>
-            {formError ? <Text accessibilityRole="alert" style={styles.error} testID="auth-error">{formError}</Text> : null}
+            {formError ? (
+              <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
+                {formError}
+              </Text>
+            ) : null}
             <Button label="Choose my preferences" onPress={continueToPreferences} />
           </>
         ) : (
           <>
             <View style={styles.heading}>
               <Text style={styles.title}>What would make a good invitation?</Text>
-              <Text style={styles.subtitle}>Choose a few signals. You can change them any time.</Text>
+              <Text style={styles.subtitle}>
+                Choose a few signals. You can change them any time.
+              </Text>
             </View>
-            <PreferencesFields availability={availability} connectionGoals={connectionGoals} interests={interests} setAvailability={setAvailability} setConnectionGoals={setConnectionGoals} setInterests={setInterests} />
-            {formError ? <Text accessibilityRole="alert" style={styles.error} testID="auth-error">{formError}</Text> : null}
-            <Button label="Create my profile" loading={busy} onPress={() => void submit()} testID="profile-submit" />
+            <PreferencesFields
+              availability={availability}
+              connectionGoals={connectionGoals}
+              interests={interests}
+              setAvailability={setAvailability}
+              setConnectionGoals={setConnectionGoals}
+              setInterests={setInterests}
+            />
+            {formError ? (
+              <Text accessibilityRole="alert" style={styles.error} testID="auth-error">
+                {formError}
+              </Text>
+            ) : null}
+            <Button
+              label="Create my profile"
+              loading={busy}
+              onPress={() => void submit()}
+              testID="profile-submit"
+            />
           </>
         )}
       </View>
@@ -326,13 +467,23 @@ function LegacySignUpScreen() {
   };
 
   const submit = async () => {
-    const result = signUpSchema.safeParse({ name, email: email.trim(), password, city, interests, availability, connectionGoals });
+    const result = signUpSchema.safeParse({
+      name,
+      email: email.trim(),
+      password,
+      city,
+      interests,
+      availability,
+      connectionGoals,
+    });
     if (!result.success) return setFormError(firstValidationMessage(result.error));
     setFormError(undefined);
     try {
       const response = await signUp(result.data);
       if (response.requiresEmailConfirmation) {
-        Alert.alert('Check your inbox', 'Confirm your email, then return here to sign in.', [{ text: 'Go to sign in', onPress: () => router.replace('/(auth)/sign-in') }]);
+        Alert.alert('Check your inbox', 'Confirm your email, then return here to sign in.', [
+          { text: 'Go to sign in', onPress: () => router.replace('/(auth)/sign-in') },
+        ]);
       } else router.replace('/(tabs)');
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Unable to create your profile.');
@@ -341,27 +492,101 @@ function LegacySignUpScreen() {
 
   return (
     <ScrollScreen keyboardAware contentContainerStyle={styles.scroll}>
-      <ScreenHeader eyebrow={`Step ${step} of 2`} onBack={() => (step === 2 ? setStep(1) : router.back())} />
-      <View style={styles.progressTrack}><View style={[styles.progressFill, { width: progress }]} /></View>
-      <View style={styles.content}>
+      <ScreenHeader
+        eyebrow={`Step ${step} of 2`}
+        onBack={() => (step === 2 ? setStep(1) : router.back())}
+      />
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: progress }]} />
+      </View>
+      <View style={styles.content} testID="auth-registration">
         {step === 1 ? (
           <>
-            <View style={styles.heading}><Text style={styles.title}>Let’s make your introduction easy.</Text><Text style={styles.subtitle}>A thoughtful profile helps people feel comfortable saying yes.</Text></View>
-            <View style={styles.form}>
-              <InputField autoComplete="name" label="Name" onChangeText={setName} placeholder="How people should know you" value={name} />
-              <InputField autoCapitalize="none" autoComplete="email" keyboardType="email-address" label="Email" onChangeText={setEmail} placeholder="you@example.com" value={email} />
-              <InputField autoCapitalize="none" autoComplete="new-password" hint="At least 8 characters" label="Password" onChangeText={setPassword} placeholder="Create a password" secureTextEntry value={password} />
-              <InputField autoComplete="off" label="City" onChangeText={setCity} placeholder="Where do you want to meet people?" value={city} />
+            <View style={styles.heading}>
+              <Text style={styles.title}>Let’s make your introduction easy.</Text>
+              <Text style={styles.subtitle}>
+                A thoughtful profile helps people feel comfortable saying yes.
+              </Text>
             </View>
-            {!isProductionBackend ? <View style={styles.note}><Text style={styles.noteText}>Local preview mode keeps this profile only on this device. Configure the Invite API for production accounts.</Text></View> : null}
-            {formError ? <Text accessibilityRole="alert" style={styles.error}>{formError}</Text> : null}
-            <Button label="Continue" onPress={continueToPreferences} />
+            <View style={styles.form}>
+              <InputField
+                autoComplete="name"
+                label="Name"
+                onChangeText={setName}
+                placeholder="How people should know you"
+                testID="registration-name"
+                value={name}
+              />
+              <InputField
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                label="Email"
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                testID="registration-email"
+                value={email}
+              />
+              <InputField
+                autoCapitalize="none"
+                autoComplete="new-password"
+                hint="At least 8 characters"
+                label="Password"
+                onChangeText={setPassword}
+                placeholder="Create a password"
+                secureTextEntry
+                testID="registration-password"
+                value={password}
+              />
+              <InputField
+                autoComplete="off"
+                label="City"
+                onChangeText={setCity}
+                placeholder="Where do you want to meet people?"
+                testID="registration-city"
+                value={city}
+              />
+            </View>
+            {!isProductionBackend ? (
+              <View style={styles.note}>
+                <Text style={styles.noteText}>
+                  Local preview mode keeps this profile only on this device. Configure the Invite
+                  API for production accounts.
+                </Text>
+              </View>
+            ) : null}
+            {formError ? (
+              <Text accessibilityRole="alert" style={styles.error} testID="registration-error">
+                {formError}
+              </Text>
+            ) : null}
+            <Button
+              label="Continue"
+              onPress={continueToPreferences}
+              testID="registration-continue"
+            />
           </>
         ) : (
           <>
-            <View style={styles.heading}><Text style={styles.title}>What would make a good invitation?</Text><Text style={styles.subtitle}>Choose a few signals. You can change them any time.</Text></View>
-            <PreferencesFields availability={availability} connectionGoals={connectionGoals} interests={interests} setAvailability={setAvailability} setConnectionGoals={setConnectionGoals} setInterests={setInterests} />
-            {formError ? <Text accessibilityRole="alert" style={styles.error}>{formError}</Text> : null}
+            <View style={styles.heading}>
+              <Text style={styles.title}>What would make a good invitation?</Text>
+              <Text style={styles.subtitle}>
+                Choose a few signals. You can change them any time.
+              </Text>
+            </View>
+            <PreferencesFields
+              availability={availability}
+              connectionGoals={connectionGoals}
+              interests={interests}
+              setAvailability={setAvailability}
+              setConnectionGoals={setConnectionGoals}
+              setInterests={setInterests}
+            />
+            {formError ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {formError}
+              </Text>
+            ) : null}
             <Button label="Create my profile" loading={state.busy} onPress={() => void submit()} />
           </>
         )}
@@ -376,8 +601,18 @@ export default function SignUpScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.huge },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.canvas },
-  progressTrack: { height: 4, marginHorizontal: spacing.xxl, backgroundColor: palette.border, borderRadius: 2 },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.canvas,
+  },
+  progressTrack: {
+    height: 4,
+    marginHorizontal: spacing.xxl,
+    backgroundColor: palette.border,
+    borderRadius: 2,
+  },
   progressFill: { height: 4, borderRadius: 2, backgroundColor: palette.primary },
   content: { padding: spacing.xxl, gap: spacing.xxl },
   heading: { gap: spacing.md },

@@ -13,6 +13,7 @@ interface ProfileCardProps {
   reasons?: string[];
   trailing?: React.ReactNode;
   selected?: boolean;
+  testID?: string;
 }
 
 export function ProfileCard({
@@ -21,12 +22,14 @@ export function ProfileCard({
   reasons = [],
   trailing,
   selected,
+  testID,
 }: ProfileCardProps) {
   return (
     <PressableScale
       accessibilityLabel={`View ${profile.name}'s profile`}
       accessibilityState={{ selected }}
       onPress={onPress}
+      testID={testID}
       style={[styles.card, selected && styles.selected]}
     >
       <View style={styles.header}>

@@ -247,6 +247,7 @@ export default function PeopleScreen() {
                   onPress={() => openProfile(profile)}
                   profile={profile}
                   reasons={reasons}
+                  testID={`profile-card-${profile.id}`}
                 />
               );
             })}

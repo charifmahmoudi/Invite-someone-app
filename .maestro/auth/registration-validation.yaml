@@ -1,0 +1,27 @@
+appId: com.charifmahmoudi.invite
+name: US-01 registration validation
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- tapOn:
+    id: welcome-sign-in
+- assertVisible:
+    id: auth-sign-in-screen
+- tapOn: Create a profile
+- assertVisible:
+    id: auth-registration
+- tapOn:
+    id: registration-email
+- inputText: invalid-email
+- tapOn:
+    id: registration-password
+- inputText: short
+- hideKeyboard
+- tapOn:
+    id: registration-continue
+- assertVisible:
+    id: registration-error
+- assertVisible: Name must be at least 2 characters.
+- takeScreenshot: evidence/US-01/01-registration-validation

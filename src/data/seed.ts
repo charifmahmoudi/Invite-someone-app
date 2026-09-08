@@ -64,7 +64,6 @@ export const seedProfiles: Profile[] = [
     city: 'Berlin',
     initials: 'JW',
     avatarColor: '#597B57',
-    avatarUrl: 'https://api.dicebear.com/9.x/notionists/png?seed=Jonas-Weber&size=256',
     approximateLocation: { area: 'Prenzlauer Berg', coordinates: [13.42, 52.54] },
     interests: ['Outdoors', 'Sports', 'Coffee', 'Wellness'],
     availability: ['Saturday', 'Sunday'],

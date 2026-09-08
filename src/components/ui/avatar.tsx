@@ -8,9 +8,10 @@ interface AvatarProps {
   profile?: Pick<Profile, 'name' | 'initials' | 'avatarColor' | 'avatarUrl' | 'isVerified'>;
   size?: number;
   style?: ViewStyle;
+  testID?: string;
 }
 
-export function Avatar({ profile, size = 44, style }: AvatarProps) {
+export function Avatar({ profile, size = 44, style, testID }: AvatarProps) {
   const [failedUrl, setFailedUrl] = useState<string>();
   const initials = profile?.initials || '?';
   const fontSize = Math.max(12, size * 0.34);
@@ -18,6 +19,7 @@ export function Avatar({ profile, size = 44, style }: AvatarProps) {
   return (
     <View
       accessibilityLabel={profile ? `${profile.name}'s avatar` : 'Unknown person'}
+      testID={testID}
       style={[
         styles.avatar,
         {

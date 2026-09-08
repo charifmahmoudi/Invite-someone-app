@@ -34,8 +34,12 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={styles.profileHero}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        testID="profile-screen"
+      >
+        <View style={styles.profileHero} testID="profile-summary">
           <View style={styles.heroTop}>
             <Avatar profile={profile} size={88} />
             <Button
@@ -43,6 +47,7 @@ export default function ProfileScreen() {
               icon="edit"
               label="Edit profile"
               onPress={() => router.push('/profile/edit')}
+              testID="profile-edit"
               variant="outline"
             />
           </View>
@@ -147,7 +152,13 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <Button icon="logout" label="Sign out" onPress={logout} variant="danger" />
+        <Button
+          icon="logout"
+          label="Sign out"
+          onPress={logout}
+          testID="profile-sign-out"
+          variant="danger"
+        />
         <Text style={styles.version}>Invite · MVP 1.0</Text>
       </ScrollView>
     </Screen>
