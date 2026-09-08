@@ -11,7 +11,7 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { ScrollScreen } from '@/components/ui/screen';
 import { categoryColors, palette, radius, shadow, spacing, typography } from '@/constants/theme';
 import { useApp } from '@/state/app-context';
-import { formatActivityDate } from '@/utils/format';
+import { formatActivityDate, reliabilityLabel } from '@/utils/format';
 
 export default function ActivityDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,8 +33,8 @@ export default function ActivityDetailsScreen() {
   if (!activity || !host) {
     return (
       <ScrollScreen>
-        <ScreenHeader onBack={() => router.back()} title="Activity" />
-        <Text style={styles.notFound}>This activity is no longer available.</Text>
+        <ScreenHeader onBack={() => router.back()} title="Plan" />
+        <Text style={styles.notFound}>This plan is no longer available.</Text>
       </ScrollScreen>
     );
   }
@@ -51,7 +51,7 @@ export default function ActivityDetailsScreen() {
   const join = async () => {
     try {
       await joinActivity(activity.id);
-      Alert.alert('You’re in', 'The activity is now in your upcoming plans.');
+      Alert.alert('You’re in', 'The plan is now in your upcoming plans.');
     } catch (error) {
       Alert.alert('Unable to join', error instanceof Error ? error.message : 'Please try again.');
     }
@@ -76,7 +76,7 @@ export default function ActivityDetailsScreen() {
         onBack={() => router.back()}
         right={
           <PressableScale
-            accessibilityLabel={saved ? 'Remove from saved activities' : 'Save activity'}
+            accessibilityLabel={saved ? 'Remove from saved plans' : 'Save plan'}
             haptic
             onPress={() => void toggleSavedActivity(activity.id)}
             style={styles.headerButton}
@@ -176,10 +176,13 @@ export default function ActivityDetailsScreen() {
           >
             <Avatar profile={host} size={58} />
             <View style={styles.hostCopy}>
-              <Text style={styles.hostName}>{host.name}</Text>
+              <View style={styles.hostNameRow}>
+                <Text style={styles.hostName}>{host.name}</Text>
+                {host.isVerified ? <AppIcon name="shield" color={palette.forest} size={17} /> : null}
+              </View>
               <Text style={styles.hostHeadline}>{host.headline}</Text>
               <Text style={styles.reliability}>
-                {host.reliabilityScore}% reliable · {host.completedActivities} plans
+                {reliabilityLabel(host.completedActivities, host.reliabilityScore)} · {host.completedActivities} plans joined
               </Text>
             </View>
             <AppIcon name="chevron-right" color={palette.inkMuted} size={20} />
@@ -223,11 +226,11 @@ export default function ActivityDetailsScreen() {
             }
           />
         ) : !isAttending && !invitation && activity.visibility === 'community' && !isFull ? (
-          <Button label="Join this activity" onPress={() => void join()} />
+          <Button label="Join this plan" onPress={() => void join()} />
         ) : !isAttending && !invitation ? (
           <View style={styles.unavailable}>
             <Text style={styles.unavailableText}>
-              {isFull ? 'This activity is full.' : 'This plan is invite-only.'}
+              {isFull ? 'This plan is full.' : 'This plan is invite-only.'}
             </Text>
           </View>
         ) : null}
@@ -278,7 +281,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: '#F0D8CF',
-    backgroundColor: '#FEF3EF',
+    backgroundColor: palette.primarySoft,
     padding: spacing.lg,
     gap: spacing.md,
   },
@@ -326,6 +329,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   hostCopy: { flex: 1, gap: 2 },
+  hostNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hostName: { ...typography.h3, color: palette.ink },
   hostHeadline: { ...typography.small, color: palette.inkMuted },
   reliability: { ...typography.micro, color: palette.forest, marginTop: 3 },
