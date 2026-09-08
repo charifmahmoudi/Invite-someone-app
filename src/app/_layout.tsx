@@ -30,6 +30,15 @@ export default function RootLayout() {
               name="invite/[activityId]"
               options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
             />
+            <Stack.Screen
+              name="activity/edit/[id]"
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen
+              name="report"
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen name="blocked" options={{ animation: 'slide_from_right' }} />
           </Stack>
         </InviteAuthProvider>
       </SafeAreaProvider>
