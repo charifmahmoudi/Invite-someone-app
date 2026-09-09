@@ -48,7 +48,7 @@ export default function InvitationsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen testID="invitations-screen">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>MAKE IT EASY TO SAY YES</Text>
