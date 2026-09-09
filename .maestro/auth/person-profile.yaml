@@ -22,7 +22,8 @@ name: US-13 profile trust context and invitation eligibility
     visible:
       id: people-screen
     timeout: 60000
-- tapOn: People
+- tapOn:
+    id: tab-people
 - assertVisible:
     id: profile-card-profile-jonas
 - takeScreenshot: evidence/US-13/01-avatar-fallback
