@@ -127,13 +127,17 @@ jobs:
       - name: Install Maestro
         run: curl -Ls "https://get.maestro.mobile.dev" | bash
 
-      - name: Enable KVM acceleration
+      - name: Check emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-          test -r /dev/kvm -a -w /dev/kvm
+          if test -r /dev/kvm -a -w /dev/kvm; then
+            echo 'KVM is available; the emulator will use hardware acceleration.'
+          else
+            echo 'KVM is unavailable; the emulator runner will use its automatic fallback.'
+          fi
 
       - name: Run emulator smoke flow
         uses: reactivecircus/android-emulator-runner@v2
@@ -142,7 +146,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel auto
           script: |
             adb reverse tcp:4000 tcp:4000
             adb install -r android/app/build/outputs/apk/release/app-release.apk
