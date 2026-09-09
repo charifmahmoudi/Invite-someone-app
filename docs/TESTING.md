@@ -2,7 +2,7 @@
 
 _Last verified: 2026-09-08._
 
-This document defines **what each test layer must prove**. For current progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For exact operator steps, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md). For environment and deployment boundaries, use [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
+This document defines **what each test layer must prove**. For current progress, see [CURRENT_STATUS.md](./CURRENT_STATUS.md). For exact Android emulator diagnostics and evidence handling, use [ANDROID_E2E_TROUBLESHOOTING.md](./ANDROID_E2E_TROUBLESHOOTING.md). For exact operator steps, use [FIREBASE_OPERATIONS_RUNBOOK.md](./FIREBASE_OPERATIONS_RUNBOOK.md). For environment and deployment boundaries, use [DEPLOYMENT_ARCHITECTURE.md](./DEPLOYMENT_ARCHITECTURE.md).
 
 ## Test layers
 
@@ -107,6 +107,8 @@ Do not introduce an auth bypass just to make E2E easier.
 Use emulator tests for fast preflight and repeatable UI/native checks.
 
 Every emulator acceptance run must reset the isolated dataset through the guarded fixture boundary described in [E2E_FIXTURES.md](./E2E_FIXTURES.md). The boundary is disabled by default, requires a dedicated `e2e`/`test` database name and protected token, and cannot target the production API URL.
+
+For failure triage, artifact interpretation, emulator/API routing, session diagnostics, and the history of workflow-specific fixes, see [ANDROID_E2E_TROUBLESHOOTING.md](./ANDROID_E2E_TROUBLESHOOTING.md).
 
 Google Sign-In preflight requires an emulator image with Google Play services. A direct staging APK can validate the repository/test signing OAuth registration, but it cannot prove Play App Signing OAuth registration.
 

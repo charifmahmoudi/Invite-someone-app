@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Run flows one at a time so clearState and the deterministic account cannot
+# interfere across tests. Keep diagnostics in the log for CI triage.
 set +e
 
 failed=0
