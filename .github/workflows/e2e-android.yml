@@ -87,12 +87,13 @@ jobs:
       - name: Start isolated Invite API
         run: |
           npm run server:start > /tmp/invite-e2e-api.log 2>&1 &
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:4000/v1/e2e/ready \
+          for attempt in {1..90}; do
+            if curl --fail --silent --connect-timeout 2 --max-time 5 \
+              http://127.0.0.1:4000/v1/e2e/ready \
               -H "Authorization: Bearer $E2E_FIXTURES_TOKEN" >/dev/null; then
               exit 0
             fi
-            sleep 2
+            sleep 3
           done
           cat /tmp/invite-e2e-api.log
           exit 1
