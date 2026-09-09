@@ -19,7 +19,8 @@ name: US-07 community activity joining
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    id: plans-screen
+    visible:
+      id: plans-screen
     timeout: 60000
 - tapOn: Plans
 - assertVisible: Canal walk & coffee
