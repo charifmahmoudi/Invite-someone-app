@@ -32,10 +32,10 @@ export default function TabsLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Plans', tabBarIcon: tabIcon('home') }} />
-      <Tabs.Screen name="people" options={{ title: 'People', tabBarIcon: tabIcon('people') }} />
-      <Tabs.Screen name="invitations" options={{ title: 'Invites', tabBarIcon: tabIcon('mail') }} />
-      <Tabs.Screen name="profile" options={{ title: 'You', tabBarIcon: tabIcon('person') }} />
+      <Tabs.Screen name="index" options={{ title: 'Plans', tabBarButtonTestID: 'tab-plans', tabBarIcon: tabIcon('home') }} />
+      <Tabs.Screen name="people" options={{ title: 'People', tabBarButtonTestID: 'tab-people', tabBarIcon: tabIcon('people') }} />
+      <Tabs.Screen name="invitations" options={{ title: 'Invites', tabBarButtonTestID: 'tab-invites', tabBarIcon: tabIcon('mail') }} />
+      <Tabs.Screen name="profile" options={{ title: 'You', tabBarButtonTestID: 'tab-profile', tabBarIcon: tabIcon('person') }} />
     </Tabs>
   );
 }
