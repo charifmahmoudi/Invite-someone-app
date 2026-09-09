@@ -13,7 +13,8 @@ import type {
 } from '@/types/domain';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '');
-const SESSION_KEY = '@invite/mongodb-session/v1';
+// Android SecureStore keys must contain only letters, numbers, '.', '-', and '_'.
+const SESSION_KEY = 'invite_mongodb_session_v1';
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
@@ -225,10 +226,7 @@ export const loadMongoInvitationsPage = (
   direction?: 'sent' | 'received',
   cursor?: string,
   limit = 20,
-) =>
-  request<ApiPage<Invitation>>(
-    `/v1/invitations${queryString({ direction, cursor, limit })}`,
-  );
+) => request<ApiPage<Invitation>>(`/v1/invitations${queryString({ direction, cursor, limit })}`);
 
 export const loadMongoSavedPage = (cursor?: string, limit = 20) =>
   request<ApiPage<string>>(`/v1/saved${queryString({ cursor, limit })}`);
