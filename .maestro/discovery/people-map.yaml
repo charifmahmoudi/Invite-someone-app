@@ -19,7 +19,7 @@ name: US-12 approximate people map and privacy disclosure
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    visible: People
+    id: people-screen
     timeout: 60000
 - tapOn: People
 - tapOn: Map
