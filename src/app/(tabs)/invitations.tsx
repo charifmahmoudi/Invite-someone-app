@@ -156,7 +156,7 @@ export default function InvitationsScreen() {
           />
         ) : null}
 
-        <View style={styles.safetyNote}>
+        <View style={styles.safetyNote} testID="invitations-safety-guidance">
           <AppIcon name="shield" color={palette.forest} size={22} />
           <Text style={styles.safetyText}>
             Meet in public for first-time plans, tell someone where you are going, and trust your

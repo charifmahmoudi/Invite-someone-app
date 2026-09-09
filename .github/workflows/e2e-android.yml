@@ -142,7 +142,7 @@ jobs:
           script: |
             adb reverse tcp:4000 tcp:4000
             adb install -r android/app/build/outputs/apk/release/app-release.apk
-            "$HOME/.maestro/bin/maestro" test -e E2E_EMAIL="$E2E_EMAIL" -e E2E_PASSWORD="$E2E_PASSWORD" .maestro/auth .maestro/discovery .maestro/activities .maestro/invitations
+            "$HOME/.maestro/bin/maestro" test -e E2E_EMAIL="$E2E_EMAIL" -e E2E_PASSWORD="$E2E_PASSWORD" .maestro/auth .maestro/discovery .maestro/activities .maestro/invitations .maestro/safety
 
       - name: Upload Maestro evidence
         if: always()
@@ -154,6 +154,8 @@ jobs:
             evidence/US-01
             evidence/US-02
             evidence/US-13
+            evidence/US-08
+            evidence/US-10
           if-no-files-found: ignore
           retention-days: 14
 
