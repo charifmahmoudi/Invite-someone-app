@@ -19,7 +19,7 @@ name: US-10 first-meeting safety guidance
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    visible: Invites
+    id: invitations-screen
     timeout: 60000
 - tapOn: Invites
 - assertVisible:
