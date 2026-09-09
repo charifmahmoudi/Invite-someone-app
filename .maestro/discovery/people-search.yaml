@@ -22,7 +22,8 @@ name: US-03 people search and recommendation reasons
     visible:
       id: people-screen
     timeout: 60000
-- tapOn: People
+- tapOn:
+    id: tab-people
 - assertVisible:
     id: people-search
 - tapOn:
