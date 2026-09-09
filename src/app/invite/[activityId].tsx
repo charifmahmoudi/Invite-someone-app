@@ -129,6 +129,7 @@ export default function InvitePeopleScreen() {
           maxLength={180}
           multiline
           onChangeText={setMessage}
+          testID="invite-personal-note"
           value={message}
         />
         <View style={styles.actions}>
@@ -141,6 +142,7 @@ export default function InvitePeopleScreen() {
             )}
             loading={state.busy}
             onPress={() => void submit()}
+            testID="invite-send-submit"
           />
           <Button label="Skip for now" onPress={finish} variant="ghost" />
         </View>
