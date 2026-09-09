@@ -28,7 +28,8 @@ name: US-02 profile editing and session lifecycle
     visible:
       id: plans-screen
     timeout: 60000
-- tapOn: You
+- tapOn:
+    id: tab-profile
 - assertVisible:
     id: profile-summary
 - takeScreenshot: evidence/US-02/01-profile-before
