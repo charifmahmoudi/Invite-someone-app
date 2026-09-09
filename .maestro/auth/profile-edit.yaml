@@ -19,12 +19,14 @@ name: US-02 profile editing and session lifecycle
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    id: plans-screen
+    visible:
+      id: plans-screen
     timeout: 60000
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    id: plans-screen
+    visible:
+      id: plans-screen
     timeout: 60000
 - tapOn: You
 - assertVisible:
