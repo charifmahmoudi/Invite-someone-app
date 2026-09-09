@@ -22,7 +22,8 @@ name: US-11 combined filters and recovery
     visible:
       id: people-screen
     timeout: 60000
-- tapOn: People
+- tapOn:
+    id: tab-people
 - tapOn: Filters
 - tapOn: Outdoors
 - tapOn: Saturday
