@@ -74,7 +74,7 @@ export default function PeopleScreen() {
 
   return (
     <Screen testID="people-screen">
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} testID="people-screen">
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>YOUR LOCAL CIRCLE</Text>
           <Text style={styles.title}>People worth inviting</Text>
