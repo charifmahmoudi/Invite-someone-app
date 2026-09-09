@@ -87,6 +87,7 @@ export default function PeopleScreen() {
         <SearchField
           onChangeText={setQuery}
           placeholder="Search names, bios, interests, or areas"
+          testID="people-search"
           value={query}
         />
 
