@@ -34,7 +34,9 @@ jobs:
       JWT_SECRET: invite-android-e2e-jwt-secret-2026-change
       MONGODB_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true
       MONGODB_DB_NAME: invite_android_e2e
-      MONGODB_ENSURE_INDEXES_ON_START: 'true'
+      # Index creation is exercised by the API integration job. Keeping it out of
+      # this process makes the emulator job's HTTP readiness deterministic.
+      MONGODB_ENSURE_INDEXES_ON_START: 'false'
       E2E_FIXTURES_ENABLED: 'true'
       PORT: '4000'
 
