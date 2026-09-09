@@ -3,6 +3,10 @@ name: US-02 profile editing and session lifecycle
 ---
 - launchApp:
     clearState: true
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
 - tapOn:
     id: welcome-sign-in
 - tapOn:

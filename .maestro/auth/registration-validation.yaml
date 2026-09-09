@@ -5,6 +5,10 @@ name: US-01 registration validation
     clearState: true
 - assertVisible:
     id: welcome-screen
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
 - tapOn:
     id: welcome-sign-in
 - assertVisible:

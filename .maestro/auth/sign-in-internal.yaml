@@ -4,6 +4,10 @@ appId: com.charifmahmoudi.invite
     clearState: true
 - assertVisible:
     id: welcome-screen
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
 - tapOn:
     id: welcome-sign-in
 - assertVisible:
