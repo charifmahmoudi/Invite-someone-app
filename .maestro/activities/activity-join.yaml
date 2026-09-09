@@ -22,7 +22,8 @@ name: US-07 community activity joining
     visible:
       id: plans-screen
     timeout: 60000
-- tapOn: Plans
+- tapOn:
+    id: tab-plans
 - assertVisible: Canal walk & coffee
 - tapOn: Canal walk & coffee
 - assertVisible: Join this activity
