@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      EXPO_PUBLIC_API_URL: http://10.0.2.2:4000
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:4000
       E2E_EMAIL: demo@invite.app
       E2E_PASSWORD: invite-demo
       E2E_FIXTURES_TOKEN: invite-android-e2e-fixture-token-2026
@@ -116,7 +116,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          EXPO_PUBLIC_API_URL="$EXPO_PUBLIC_API_URL" ./gradlew :app:assembleRelease --no-daemon
+          EXPO_PUBLIC_API_URL=http://10.0.2.2:4000 ./gradlew :app:assembleRelease --no-daemon
         env:
           NODE_ENV: production
 
