@@ -22,7 +22,8 @@ name: US-09 activity host and attendee trust context
     visible:
       id: plans-screen
     timeout: 60000
-- tapOn: Plans
+- tapOn:
+    id: tab-plans
 - tapOn: Canal walk & coffee
 - assertVisible: Hosted by
 - assertVisible: Who’s going
