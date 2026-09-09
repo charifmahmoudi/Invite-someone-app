@@ -19,7 +19,7 @@ name: US-08 saved activity persistence
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    visible: Plans
+    id: plans-screen
     timeout: 60000
 - tapOn: Plans
 - tapOn: Low-stakes game night
