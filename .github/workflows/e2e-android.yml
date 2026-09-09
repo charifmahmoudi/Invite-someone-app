@@ -23,7 +23,9 @@ jobs:
   smoke:
     name: Internal-auth compatibility smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # Android SDK setup, Expo prebuild, Gradle, emulator boot, and the
+    # sequential story flows can exceed the default hosted-runner budget.
+    timeout-minutes: 120
     env:
       EXPO_PUBLIC_API_URL: http://127.0.0.1:4000
       E2E_EMAIL: demo@invite.app
