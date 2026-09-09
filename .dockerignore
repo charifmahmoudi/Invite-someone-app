@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+node_modules
+coverage
+dist
+.expo
+android
+ios
+*.log
+.env
+.env.*
+!.env.example
+!server/.env.example

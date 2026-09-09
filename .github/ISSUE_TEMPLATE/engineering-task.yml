@@ -1,0 +1,35 @@
+name: Engineering task
+description: Track infrastructure, testing, documentation, or maintenance work.
+title: '[Task] '
+labels: ['engineering']
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: State the observable result, not only the activity.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: List included and explicitly excluded work.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] …
+        - [ ] …
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Commands, CI jobs, artifacts, or manual checks that prove completion.
+    validations:
+      required: true

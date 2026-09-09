@@ -1,0 +1,35 @@
+appId: com.charifmahmoudi.invite
+name: US-06 invitation decisions and cancellation
+---
+- launchApp:
+    clearState: true
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
+- tapOn:
+    id: welcome-sign-in
+- tapOn:
+    id: auth-email
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible: Invites
+    timeout: 60000
+- tapOn: Invites
+- assertVisible: Canal walk & coffee
+- assertVisible: I’m in
+- takeScreenshot: evidence/US-06/01-pending-invitation
+- tapOn: I’m in
+- assertVisible: You’re in
+- takeScreenshot: evidence/US-06/02-invitation-decision
+- tapOn: Sent
+- assertVisible: Low-stakes game night
+- tapOn: Cancel invitation
+- assertVisible: cancelled
+- takeScreenshot: evidence/US-06/03-cancelled-invitation

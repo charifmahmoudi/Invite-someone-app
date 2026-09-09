@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Invite MVP story evidence",
+  "type": "object",
+  "required": ["version", "stories"],
+  "properties": {
+    "version": { "const": 2 },
+    "stories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "feature",
+          "status",
+          "implementation",
+          "tests",
+          "e2e",
+          "evidence",
+          "manualAnchor",
+          "criteria"
+        ],
+        "properties": {
+          "id": { "pattern": "^US-[0-9]{2}$" },
+          "feature": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["planned", "partial", "verified", "waived"] },
+          "implementation": { "type": "array", "items": { "type": "string" } },
+          "tests": { "type": "array", "items": { "type": "string" } },
+          "e2e": { "type": ["string", "null"] },
+          "evidence": { "type": "string" },
+          "manualAnchor": { "type": "string" },
+          "criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "testLayers",
+                "implementationRefs",
+                "testRefs",
+                "e2eFlow",
+                "screenshots",
+                "manualAnchor"
+              ],
+              "properties": {
+                "id": { "pattern": "^US-[0-9]{2}-AC-[0-9]{2}$" },
+                "testLayers": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "enum": ["unit", "component", "api", "e2e"] }
+                },
+                "implementationRefs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string" }
+                },
+                "testRefs": { "type": "array", "items": { "type": "string" } },
+                "e2eFlow": { "type": ["string", "null"] },
+                "screenshots": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "pattern": "^evidence/US-[0-9]{2}/.+\\.png$" }
+                },
+                "manualAnchor": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

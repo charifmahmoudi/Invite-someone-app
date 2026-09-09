@@ -1,0 +1,71 @@
+name: MVP user story
+description: Implement and verify an MVP user story end to end.
+title: '[US-XX] '
+labels: ['mvp', 'user-story']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A story is complete only when implementation, automated tests, Android E2E evidence, screenshots, and user documentation are all present.
+  - type: input
+    id: feature
+    attributes:
+      label: Feature
+      placeholder: People discovery
+    validations:
+      required: true
+  - type: input
+    id: story
+    attributes:
+      label: User story
+      placeholder: As a member, I want… so that…
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: Use independently verifiable Given/When/Then scenarios.
+      placeholder: |
+        Given …
+        When …
+        Then …
+    validations:
+      required: true
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation scope
+      description: Identify client routes/components, API endpoints, database rules, and important edge cases.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence
+      value: |
+        - [ ] Unit/domain tests
+        - [ ] API integration tests where applicable
+        - [ ] Maestro Android E2E flow
+        - [ ] Assertions before each screenshot
+        - [ ] Screenshots named and stored under `evidence/US-XX/`
+        - [ ] User-manual section updated
+        - [ ] CI run and commit SHA recorded
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Privacy, safety, and accessibility
+      description: Describe relevant authorization, personal-data, abuse, accessibility, and failure-state considerations.
+  - type: checkboxes
+    id: done
+    attributes:
+      label: Definition of done
+      options:
+        - label: Every acceptance criterion is implemented and automatically verified where practical.
+          required: true
+        - label: Type-check, lint, unit tests, integration tests, E2E, and evidence validation pass.
+          required: true
+        - label: Documentation describes only behavior demonstrated by current evidence.
+          required: true

@@ -1,0 +1,369 @@
+name: Validate Firebase Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['impl/firebase-auth']
+    paths:
+      - '.github/workflows/validate-firebase-android.yml'
+      - 'app.json'
+      - 'google-services.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'src/auth/**'
+      - 'src/data/firebase.ts'
+      - 'src/app/(auth)/**'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      EXPO_PUBLIC_API_URL: https://invite-someone-api-firebase-e2e.onrender.com
+      EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyAyPGGCXmzXSJcnadJsb6zRvbL5_Xn7rqE
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: invite-someone-app.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: invite-someone-app
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: invite-someone-app.firebasestorage.app
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '367720887571'
+      EXPO_PUBLIC_FIREBASE_APP_ID: '1:367720887571:web:fa9518d2e19ac3fae816e6'
+      GOOGLE_CLOUD_PROJECT_ID: invite-someone-app
+      GOOGLE_PLAY_PACKAGE_NAME: com.charifmahmoudi.invite
+      GOOGLE_PLAY_TRACK: internal
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Smoke isolated Firebase API
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail "$EXPO_PUBLIC_API_URL/health" | grep -Fq '"status":"ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "Firebase E2E API did not become healthy." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          STATUS="$(curl --silent --show-error --output /tmp/unauthenticated-me.json --write-out '%{http_code}' "$EXPO_PUBLIC_API_URL/v1/me")"
+          test "$STATUS" = '401'
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: '1'
+
+      - name: Verify generated Firebase configuration
+        run: |
+          test -f android/app/google-services.json
+          grep -Fq 'com.charifmahmoudi.invite' android/app/google-services.json
+
+      - name: Build Firebase-enabled validation APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Verify validation APK and signing certificate
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          unzip -Z1 "$APK" | grep -Fxq 'assets/index.android.bundle'
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -n "$APKSIGNER"
+          CERT_SHA1="$("$APKSIGNER" verify --print-certs "$APK" | sed -n 's/.*SHA-1 digest: //p' | head -1 | tr '[:lower:]' '[:upper:]' | tr -d ':')"
+          echo "Validation APK signing SHA-1: $CERT_SHA1"
+          test "$CERT_SHA1" = '5E8F16062EA3CD2C4A0D547876BAA6F38CABF625'
+
+      - name: Upload validation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-firebase-android-e2e
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Check Play upload signing secrets
+        id: play-signing
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          if [ -n "$PLAY_UPLOAD_KEYSTORE_BASE64" ] && [ -n "$PLAY_UPLOAD_STORE_PASSWORD" ] && [ -n "$PLAY_UPLOAD_KEY_ALIAS" ] && [ -n "$PLAY_UPLOAD_KEY_PASSWORD" ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '### Google Play bundle signing'
+              echo ''
+              echo 'Play upload signing secrets are not configured, so no Play AAB was produced.'
+              echo 'Required repository secrets:'
+              echo '- `PLAY_UPLOAD_KEYSTORE_BASE64`'
+              echo '- `PLAY_UPLOAD_STORE_PASSWORD`'
+              echo '- `PLAY_UPLOAD_KEY_ALIAS`'
+              echo '- `PLAY_UPLOAD_KEY_PASSWORD`'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Configure Play release signing
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/play-upload.jks
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('android/app/build.gradle')
+          text = path.read_text()
+          marker = '    signingConfigs {\n'
+          if marker not in text:
+              raise SystemExit('Could not locate signingConfigs block in generated build.gradle')
+          release_config = '''    signingConfigs {\n        playRelease {\n            storeFile file(System.getenv("PLAY_UPLOAD_KEYSTORE_FILE"))\n            storePassword System.getenv("PLAY_UPLOAD_STORE_PASSWORD")\n            keyAlias System.getenv("PLAY_UPLOAD_KEY_ALIAS")\n            keyPassword System.getenv("PLAY_UPLOAD_KEY_PASSWORD")\n        }\n'''
+          text = text.replace(marker, release_config, 1)
+
+          def block_span(source, pattern, label):
+              match = re.search(pattern, source, re.MULTILINE)
+              if not match:
+                  raise SystemExit(f'Could not locate {label} in generated build.gradle')
+              brace_start = source.find('{', match.start())
+              depth = 0
+              for index in range(brace_start, len(source)):
+                  if source[index] == '{':
+                      depth += 1
+                  elif source[index] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return match.start(), index + 1
+              raise SystemExit(f'Could not determine {label} block in generated build.gradle')
+
+          build_start, build_end = block_span(
+              text,
+              r'^\s*buildTypes\s*\{',
+              'buildTypes block',
+          )
+          build_block = text[build_start:build_end]
+          release_start, release_end = block_span(
+              build_block,
+              r'^\s*release\s*\{',
+              'release buildType',
+          )
+          release_block = build_block[release_start:release_end]
+          release_block, replacements = re.subn(
+              r'\bsigningConfig\s+signingConfigs\.debug\b',
+              'signingConfig signingConfigs.playRelease',
+              release_block,
+              count=1,
+          )
+          if replacements != 1:
+              raise SystemExit('Could not locate release signingConfig in generated build.gradle')
+          build_block = (
+              build_block[:release_start]
+              + release_block
+              + build_block[release_end:]
+          )
+          text = text[:build_start] + build_block + text[build_end:]
+
+          if 'playRelease {' not in text:
+              raise SystemExit('Play release signingConfig was not created')
+          if 'signingConfig signingConfigs.playRelease' not in release_block:
+              raise SystemExit('Release buildType was not assigned to Play signingConfig')
+          path.write_text(text)
+          PY
+
+      - name: Build Play release app bundle
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        working-directory: android
+        env:
+          PLAY_UPLOAD_KEYSTORE_FILE: play-upload.jks
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Verify Play app bundle release signature
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        run: |
+          set -euo pipefail
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          if [ ! -f "$AAB" ]; then
+            echo '::error title=Missing Play AAB::Expected release app bundle was not produced.'
+            exit 1
+          fi
+          unzip -Z1 "$AAB" > /tmp/aab-entries.txt
+          if ! grep -Fxq 'base/manifest/AndroidManifest.xml' /tmp/aab-entries.txt; then
+            echo '::error title=Invalid Play AAB::base/manifest/AndroidManifest.xml is missing.'
+            exit 1
+          fi
+          if ! jarsigner -verify -verbose -certs "$AAB" > /tmp/aab-signature.txt 2>&1; then
+            cat /tmp/aab-signature.txt
+            echo '::error title=Play AAB signature verification failed::jarsigner rejected the release bundle.'
+            exit 1
+          fi
+          cat /tmp/aab-signature.txt
+          if ! keytool -printcert -jarfile "$AAB" > /tmp/aab-certificate.txt 2>&1; then
+            cat /tmp/aab-certificate.txt
+            echo '::error title=Play AAB certificate inspection failed::keytool could not read the bundle signer certificate.'
+            exit 1
+          fi
+          cat /tmp/aab-certificate.txt
+          if grep -Fqi 'Android Debug' /tmp/aab-certificate.txt; then
+            echo '::error title=Debug-signed Play AAB::Play AAB is still signed with an Android debug certificate.'
+            exit 1
+          fi
+
+      - name: Upload Play release app bundle
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-firebase-play-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Authenticate to Google Cloud for Play Internal testing
+        id: play-auth
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: invite-someone-app
+          workload_identity_provider: projects/367720887571/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: invite-play-ci@invite-someone-app.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+
+      - name: Upload and release to Google Play Internal testing
+        if: ${{ steps.play-signing.outputs.available == 'true' }}
+        env:
+          GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.play-auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          API_ROOT="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}"
+          UPLOAD_ROOT="https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${GOOGLE_PLAY_PACKAGE_NAME}"
+
+          api_error() {
+            local label="$1"
+            local file="$2"
+            echo "::error title=Google Play Internal testing::${label}"
+            if [ -f "$file" ]; then
+              cat "$file" >&2
+            fi
+            exit 1
+          }
+
+          EDIT_RESPONSE=/tmp/google-play-edit.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$EDIT_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "${API_ROOT}/edits"; then
+            api_error 'Could not create Google Play edit.' "$EDIT_RESPONSE"
+          fi
+
+          EDIT_ID="$(jq -r '.id // empty' "$EDIT_RESPONSE")"
+          if [ -z "$EDIT_ID" ]; then
+            api_error 'Google Play edit response did not contain an edit ID.' "$EDIT_RESPONSE"
+          fi
+
+          BUNDLE_RESPONSE=/tmp/google-play-bundle.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$BUNDLE_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/octet-stream' \
+            --data-binary @"$AAB" \
+            "${UPLOAD_ROOT}/edits/${EDIT_ID}/bundles?uploadType=media"; then
+            api_error 'AAB upload to Google Play failed.' "$BUNDLE_RESPONSE"
+          fi
+
+          VERSION_CODE="$(jq -r '.versionCode // empty' "$BUNDLE_RESPONSE")"
+          if [ -z "$VERSION_CODE" ]; then
+            api_error 'Google Play bundle response did not contain a version code.' "$BUNDLE_RESPONSE"
+          fi
+
+          TRACK_REQUEST=/tmp/google-play-track-request.json
+          jq -n \
+            --arg track "$GOOGLE_PLAY_TRACK" \
+            --arg versionCode "$VERSION_CODE" \
+            --arg releaseName "Invite Internal ${GITHUB_RUN_NUMBER}" \
+            '{
+              track: $track,
+              releases: [
+                {
+                  name: $releaseName,
+                  versionCodes: [$versionCode],
+                  status: "completed"
+                }
+              ]
+            }' > "$TRACK_REQUEST"
+
+          TRACK_RESPONSE=/tmp/google-play-track.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$TRACK_RESPONSE" \
+            --request PUT \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data-binary @"$TRACK_REQUEST" \
+            "${API_ROOT}/edits/${EDIT_ID}/tracks/${GOOGLE_PLAY_TRACK}"; then
+            api_error 'Could not assign the uploaded AAB to the Internal testing track.' "$TRACK_RESPONSE"
+          fi
+
+          VALIDATE_RESPONSE=/tmp/google-play-validate.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$VALIDATE_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            "${API_ROOT}/edits/${EDIT_ID}:validate"; then
+            api_error 'Google Play rejected the Internal testing edit during validation.' "$VALIDATE_RESPONSE"
+          fi
+
+          COMMIT_RESPONSE=/tmp/google-play-commit.json
+          if ! curl --silent --show-error --fail-with-body \
+            --output "$COMMIT_RESPONSE" \
+            --request POST \
+            --header "Authorization: Bearer ${GOOGLE_PLAY_ACCESS_TOKEN}" \
+            "${API_ROOT}/edits/${EDIT_ID}:commit"; then
+            api_error 'Google Play rejected the Internal testing release commit.' "$COMMIT_RESPONSE"
+          fi
+
+          {
+            echo '### Google Play Internal testing'
+            echo ''
+            echo "- Track: \`${GOOGLE_PLAY_TRACK}\`"
+            echo "- Version code: \`${VERSION_CODE}\`"
+            echo "- Release: \`Invite Internal ${GITHUB_RUN_NUMBER}\`"
+            echo '- Result: AAB uploaded, edit validated, and release committed to Internal testing.'
+          } >> "$GITHUB_STEP_SUMMARY"

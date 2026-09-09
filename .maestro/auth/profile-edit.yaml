@@ -1,0 +1,79 @@
+appId: com.charifmahmoudi.invite
+name: US-02 profile editing and session lifecycle
+---
+- launchApp:
+    clearState: true
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
+- tapOn:
+    id: welcome-sign-in
+- tapOn:
+    id: auth-email
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible: Plans
+    timeout: 60000
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: Plans
+    timeout: 60000
+- tapOn: You
+- assertVisible:
+    id: profile-summary
+- takeScreenshot: evidence/US-02/01-profile-before
+- tapOn:
+    id: profile-edit
+- assertVisible:
+    id: profile-edit-screen
+- tapOn:
+    id: profile-edit-name
+- eraseText
+- inputText: A
+- scrollUntilVisible:
+    element:
+      id: profile-edit-save
+    direction: DOWN
+- tapOn:
+    id: profile-edit-save
+- assertVisible:
+    id: profile-edit-error
+- takeScreenshot: evidence/US-02/03-profile-validation
+- scrollUntilVisible:
+    element:
+      id: profile-edit-name
+    direction: UP
+- tapOn:
+    id: profile-edit-name
+- eraseText
+- inputText: Alex Verified
+- tapOn:
+    id: profile-edit-headline
+- eraseText
+- inputText: Coffee walks and kind local plans
+- scrollUntilVisible:
+    element:
+      id: profile-edit-save
+    direction: DOWN
+- tapOn:
+    id: profile-edit-save
+- extendedWaitUntil:
+    visible: Alex Verified
+    timeout: 30000
+- assertVisible:
+    id: profile-summary
+- takeScreenshot: evidence/US-02/02-profile-updated
+- tapOn:
+    id: profile-sign-out
+- assertVisible: Sign out?
+- tapOn: Sign out
+- assertVisible:
+    id: welcome-screen
