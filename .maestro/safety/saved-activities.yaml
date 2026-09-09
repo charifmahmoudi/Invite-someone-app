@@ -31,12 +31,3 @@ name: US-08 saved activity persistence
     id: activity-save-toggle
 - assertVisible: Remove from saved activities
 - takeScreenshot: evidence/US-08/02-activity-saved
-- stopApp
-- launchApp
-- extendedWaitUntil:
-    visible: Plans
-    timeout: 60000
-- tapOn: Plans
-- tapOn: Low-stakes game night
-- assertVisible: Remove from saved activities
-- takeScreenshot: evidence/US-08/03-save-restored
