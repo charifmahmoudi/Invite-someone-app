@@ -22,5 +22,5 @@ appId: com.charifmahmoudi.invite
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    visible: Plans
+    id: plans-screen
     timeout: 60000
