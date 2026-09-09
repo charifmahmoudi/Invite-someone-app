@@ -118,7 +118,9 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          EXPO_PUBLIC_API_URL=http://10.0.2.2:4000 ./gradlew :app:assembleRelease --no-daemon
+          # The emulator job creates an adb reverse tunnel below, so the APK
+          # should use the emulator loopback address rather than bypassing it.
+          EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 ./gradlew :app:assembleRelease --no-daemon
         env:
           NODE_ENV: production
 
