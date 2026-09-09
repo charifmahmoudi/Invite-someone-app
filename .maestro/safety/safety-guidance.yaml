@@ -22,7 +22,8 @@ name: US-10 first-meeting safety guidance
     visible:
       id: invitations-screen
     timeout: 60000
-- tapOn: Invites
+- tapOn:
+    id: tab-invites
 - assertVisible:
     id: invitations-safety-guidance
 - assertVisible: Meet in public for first-time plans
