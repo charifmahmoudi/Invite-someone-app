@@ -19,7 +19,8 @@ name: US-11 combined filters and recovery
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    id: people-screen
+    visible:
+      id: people-screen
     timeout: 60000
 - tapOn: People
 - tapOn: Filters
