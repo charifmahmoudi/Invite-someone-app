@@ -1,0 +1,30 @@
+appId: com.charifmahmoudi.invite
+name: US-09 activity host and attendee trust context
+---
+- launchApp:
+    clearState: true
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
+- tapOn:
+    id: welcome-sign-in
+- tapOn:
+    id: auth-email
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible: Plans
+    timeout: 60000
+- tapOn: Plans
+- tapOn: Canal walk & coffee
+- assertVisible: Hosted by
+- assertVisible: Who’s going
+- assertVisible: reliable
+- assertVisible: people max
+- takeScreenshot: evidence/US-09/01-activity-trust
