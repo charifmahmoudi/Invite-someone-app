@@ -22,7 +22,8 @@ name: US-12 approximate people map and privacy disclosure
     visible:
       id: people-screen
     timeout: 60000
-- tapOn: People
+- tapOn:
+    id: tab-people
 - tapOn: Map
 - assertVisible: Approximate map of matching people
 - assertVisible: Pins represent broad neighbourhood areas—not exact locations.
