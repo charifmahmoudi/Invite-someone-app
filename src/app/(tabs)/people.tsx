@@ -73,7 +73,7 @@ export default function PeopleScreen() {
     router.push({ pathname: '/person/[id]', params: { id: profile.id } });
 
   return (
-    <Screen>
+    <Screen testID="people-screen">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>YOUR LOCAL CIRCLE</Text>
