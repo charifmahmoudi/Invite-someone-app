@@ -19,7 +19,7 @@ name: US-03 people search and recommendation reasons
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    visible: People
+    id: people-screen
     timeout: 60000
 - tapOn: People
 - assertVisible:
