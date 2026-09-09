@@ -22,7 +22,8 @@ name: US-08 saved activity persistence
     visible:
       id: plans-screen
     timeout: 60000
-- tapOn: Plans
+- tapOn:
+    id: tab-plans
 - tapOn: Low-stakes game night
 - assertVisible:
     id: activity-save-toggle
