@@ -19,7 +19,8 @@ name: US-06 invitation decisions and cancellation
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    id: invitations-screen
+    visible:
+      id: invitations-screen
     timeout: 60000
 - tapOn: Invites
 - assertVisible: Canal walk & coffee
