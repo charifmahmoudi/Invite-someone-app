@@ -22,7 +22,8 @@ name: US-05 recommended invitees and personal note
     visible:
       id: plans-screen
     timeout: 60000
-- tapOn: Plans
+- tapOn:
+    id: tab-plans
 - tapOn: Low-stakes game night
 - tapOn: Invite more people
 - assertVisible: Who might enjoy this?
