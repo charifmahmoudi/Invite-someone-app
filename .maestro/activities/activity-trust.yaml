@@ -19,7 +19,8 @@ name: US-09 activity host and attendee trust context
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    id: plans-screen
+    visible:
+      id: plans-screen
     timeout: 60000
 - tapOn: Plans
 - tapOn: Canal walk & coffee
