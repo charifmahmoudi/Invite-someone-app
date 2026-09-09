@@ -19,7 +19,8 @@ name: US-13 profile trust context and invitation eligibility
 - tapOn:
     id: auth-submit
 - extendedWaitUntil:
-    id: people-screen
+    visible:
+      id: people-screen
     timeout: 60000
 - tapOn: People
 - assertVisible:
