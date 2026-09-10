@@ -23,6 +23,9 @@ name: US-07 community activity joining
       text: "What sounds good?"
     timeout: 60000
 - assertVisible: Canal walk & coffee
+- scrollUntilVisible:
+    element: Canal walk & coffee
+    direction: DOWN
 - tapOn: Canal walk & coffee
 - assertVisible: Join this activity
 - tapOn: Join this activity
