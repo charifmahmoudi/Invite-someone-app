@@ -20,7 +20,7 @@ name: US-04 activity validation and creation form
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: plans-screen
+      text: "What sounds good?"
     timeout: 60000
 - tapOn: Create
 - assertVisible: Create an activity
