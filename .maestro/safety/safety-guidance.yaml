@@ -23,7 +23,7 @@ name: US-10 first-meeting safety guidance
       text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    point: "63%, 95%"
+    id: tab-invites
 - extendedWaitUntil:
     visible:
       text: "Invitations"
