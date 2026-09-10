@@ -69,7 +69,10 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 ./gradlew :app:assembleRelease --no-daemon
+          EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 ./gradlew :app:assembleRelease \\
+            --no-daemon \\
+            --max-workers=2 \\
+            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
         env:
           NODE_ENV: production
       - name: Upload E2E APK
