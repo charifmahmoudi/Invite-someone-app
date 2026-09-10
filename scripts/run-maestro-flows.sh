@@ -14,6 +14,11 @@ fi
 
 for flow in "${flows[@]}"; do
   echo "Running Maestro flow: $flow"
+  # clearState only resets the Android app. Reset the isolated API as well so
+  # mutations from one story (joins, invitations, saves, profile edits) cannot
+  # change the starting state of the next story.
+  bash scripts/reset-e2e-fixtures.sh >/tmp/invite-e2e-fixture-reset.log
+  cat /tmp/invite-e2e-fixture-reset.log
   # Software-rendered hosted emulators can leave the Pixel launcher in an ANR
   # dialog over the app. Dismiss it before Maestro starts so it can interact
   # with the already-installed APK. This is CI hygiene, not app behavior.
