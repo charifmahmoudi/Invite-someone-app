@@ -115,7 +115,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             return;
           }
         }
-      } catch {
+      } catch (error) {
+        if (process.env.EXPO_PUBLIC_E2E_DIAGNOSTICS === 'true') {
+          console.error(
+            '[Invite App] hydration failed:',
+            error instanceof Error ? error.message : 'unknown error',
+          );
+        }
         // The welcome screen remains available even if remote hydration fails.
       }
 
