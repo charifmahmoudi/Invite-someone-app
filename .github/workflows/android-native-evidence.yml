@@ -27,7 +27,7 @@ env:
   AUTH_MODE: internal
   JWT_SECRET: invite-android-native-evidence-jwt-secret-2026
   MONGODB_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true
-  MONGODB_DB_NAME: invite_android_native_evidence
+  MONGODB_DB_NAME: invite_android_native_e2e
   MONGODB_ENSURE_INDEXES_ON_START: 'false'
   E2E_FIXTURES_ENABLED: 'true'
   PORT: '4000'
