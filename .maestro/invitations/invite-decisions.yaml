@@ -3,6 +3,10 @@ name: US-06 invitation decisions and cancellation
 ---
 - launchApp:
     clearState: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-screen
+    timeout: 60000
 - scrollUntilVisible:
     element:
       id: welcome-sign-in
