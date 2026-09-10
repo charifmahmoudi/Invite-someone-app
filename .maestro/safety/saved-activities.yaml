@@ -22,8 +22,6 @@ name: US-08 saved activity persistence
     visible:
       text: "What sounds good?"
     timeout: 60000
-- tapOn:
-    point: "12%, 95%"
 - tapOn: Low-stakes game night
 - assertVisible:
     id: activity-save-toggle
