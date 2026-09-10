@@ -20,10 +20,10 @@ name: US-11 combined filters and recovery
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: people-screen
+      text: "People worth inviting"
     timeout: 60000
 - tapOn:
-    id: tab-people
+    point: "38%, 95%"
 - tapOn: Filters
 - tapOn: Outdoors
 - tapOn: Saturday
