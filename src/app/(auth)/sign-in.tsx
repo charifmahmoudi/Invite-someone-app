@@ -230,7 +230,9 @@ function LegacySignInScreen() {
     setFormError(undefined);
     try {
       await signIn(result.data);
-      router.replace('/(tabs)');
+      // Navigate through the root route so Expo Router evaluates the updated
+      // authenticated state before mounting the tab navigator on Android.
+      router.replace('/');
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Unable to sign in.');
     }
