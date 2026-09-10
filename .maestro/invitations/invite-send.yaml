@@ -20,10 +20,10 @@ name: US-05 recommended invitees and personal note
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: plans-screen
+      text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    id: tab-plans
+    point: "12%, 95%"
 - tapOn: Low-stakes game night
 - tapOn: Invite more people
 - assertVisible: Who might enjoy this?
