@@ -22,6 +22,9 @@ name: US-09 activity host and attendee trust context
     visible:
       text: "What sounds good?"
     timeout: 60000
+- scrollUntilVisible:
+    element: Canal walk & coffee
+    direction: DOWN
 - tapOn: Canal walk & coffee
 - assertVisible: Hosted by
 - assertVisible: Who’s going
