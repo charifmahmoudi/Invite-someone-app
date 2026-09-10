@@ -20,10 +20,10 @@ name: US-13 profile trust context and invitation eligibility
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: people-screen
+      text: "People worth inviting"
     timeout: 60000
 - tapOn:
-    id: tab-people
+    point: "38%, 95%"
 - assertVisible:
     id: profile-card-profile-jonas
 - takeScreenshot: evidence/US-13/01-avatar-fallback
