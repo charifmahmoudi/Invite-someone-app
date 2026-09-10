@@ -22,6 +22,9 @@ name: US-05 recommended invitees and personal note
     visible:
       text: "What sounds good?"
     timeout: 60000
+- scrollUntilVisible:
+    element: Low-stakes game night
+    direction: DOWN
 - tapOn: Low-stakes game night
 - tapOn: Invite more people
 - assertVisible: Who might enjoy this?
