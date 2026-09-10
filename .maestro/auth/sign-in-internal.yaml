@@ -2,8 +2,10 @@ appId: com.charifmahmoudi.invite
 ---
 - launchApp:
     clearState: true
-- assertVisible:
-    id: welcome-screen
+- extendedWaitUntil:
+    visible:
+      id: welcome-screen
+    timeout: 60000
 - scrollUntilVisible:
     element:
       id: welcome-sign-in
