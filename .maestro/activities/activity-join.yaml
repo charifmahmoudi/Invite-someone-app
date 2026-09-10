@@ -22,8 +22,6 @@ name: US-07 community activity joining
     visible:
       text: "What sounds good?"
     timeout: 60000
-- tapOn:
-    point: "12%, 95%"
 - assertVisible: Canal walk & coffee
 - tapOn: Canal walk & coffee
 - assertVisible: Join this activity
