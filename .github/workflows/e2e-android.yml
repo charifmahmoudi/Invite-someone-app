@@ -143,11 +143,15 @@ jobs:
       - name: Run emulator smoke flow
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          # API 34 uses the mature Android 14 system image. The hosted runner
+          # has no /dev/kvm, so make software execution explicit and disable
+          # Vulkan to avoid emulator ColorBuffer loss during Maestro capture.
+          api-level: 34
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel auto
+          disable-linux-hw-accel: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel off -feature -Vulkan
           script: |
             adb reverse tcp:4000 tcp:4000
             adb install -r android/app/build/outputs/apk/release/app-release.apk
