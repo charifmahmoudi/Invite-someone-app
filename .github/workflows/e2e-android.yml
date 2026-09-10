@@ -189,7 +189,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-load -no-snapshot-save -feature -Vulkan
           script: |
             adb reverse tcp:4000 tcp:4000
             adb install -r android-e2e/app-release.apk
