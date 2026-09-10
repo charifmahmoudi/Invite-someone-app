@@ -23,7 +23,7 @@ name: US-06 invitation decisions and cancellation
       text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    point: "63%, 95%"
+    id: tab-invites
 - extendedWaitUntil:
     visible:
       text: "Invitations"
