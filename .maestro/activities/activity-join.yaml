@@ -20,10 +20,10 @@ name: US-07 community activity joining
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: plans-screen
+      text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    id: tab-plans
+    point: "12%, 95%"
 - assertVisible: Canal walk & coffee
 - tapOn: Canal walk & coffee
 - assertVisible: Join this activity
