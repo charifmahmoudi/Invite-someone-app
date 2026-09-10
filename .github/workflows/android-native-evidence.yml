@@ -69,7 +69,10 @@ jobs:
             android/app/src/androidTest/java/com/charifmahmoudi/invite/evidence/Us01SignInTest.java
           printf '%s\n' \
             '' \
-            'android { defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" } }' \
+            'android {' \
+            '  testBuildType "release"' \
+            '  defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }' \
+            '}' \
             'dependencies {' \
             '  androidTestImplementation "androidx.test.ext:junit:1.2.1"' \
             '  androidTestImplementation "androidx.test:runner:1.6.2"' \
