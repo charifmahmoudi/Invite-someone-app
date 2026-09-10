@@ -20,10 +20,10 @@ name: US-10 first-meeting safety guidance
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: invitations-screen
+      text: "Invitations"
     timeout: 60000
 - tapOn:
-    id: tab-invites
+    point: "63%, 95%"
 - assertVisible:
     id: invitations-safety-guidance
 - assertVisible: Meet in public for first-time plans
