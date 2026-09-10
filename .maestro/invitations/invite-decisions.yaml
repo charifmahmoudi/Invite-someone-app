@@ -20,10 +20,10 @@ name: US-06 invitation decisions and cancellation
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: invitations-screen
+      text: "Invitations"
     timeout: 60000
 - tapOn:
-    id: tab-invites
+    point: "63%, 95%"
 - assertVisible: Canal walk & coffee
 - assertVisible: I’m in
 - takeScreenshot: evidence/US-06/01-pending-invitation
