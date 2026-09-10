@@ -29,7 +29,7 @@ name: US-02 profile editing and session lifecycle
       text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    id: tab-profile
+    point: "88%, 95%"
 - assertVisible:
     id: profile-summary
 - takeScreenshot: evidence/US-02/01-profile-before
