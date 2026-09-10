@@ -3,6 +3,10 @@ name: US-09 activity host and attendee trust context
 ---
 - launchApp:
     clearState: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-screen
+    timeout: 60000
 - scrollUntilVisible:
     element:
       id: welcome-sign-in
@@ -26,6 +30,9 @@ name: US-09 activity host and attendee trust context
     element: Canal walk & coffee
     direction: DOWN
 - tapOn: Canal walk & coffee
+- scrollUntilVisible:
+    element: Hosted by
+    direction: DOWN
 - assertVisible: Hosted by
 - assertVisible: Who’s going
 - assertVisible: reliable
