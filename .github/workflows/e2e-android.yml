@@ -90,7 +90,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         include:
           - { case: activity-creation, story: US-04, flow: .maestro/activities/activity-creation.yaml }
@@ -169,8 +169,12 @@ jobs:
           exit 1
       - name: Reset deterministic E2E fixtures
         run: bash scripts/reset-e2e-fixtures.sh
-      - name: Install Maestro
-        run: curl -Ls "https://get.maestro.mobile.dev" | bash
+      - name: Install pinned Maestro
+        env:
+          MAESTRO_VERSION: 2.10.0
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          "$HOME/.maestro/bin/maestro" --version
       - name: Enable emulator acceleration when available
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -183,9 +187,9 @@ jobs:
             echo 'KVM is unavailable; this isolated flow will use software acceleration.'
           fi
       - name: Run isolated story flow
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
           profile: pixel_6
           disable-animations: true
@@ -193,7 +197,19 @@ jobs:
           script: |
             adb reverse tcp:4000 tcp:4000
             adb install -r android-e2e/app-release.apk
-            bash scripts/run-maestro-flows.sh
+            set +e
+            bash scripts/run-maestro-flows.sh 2>&1 | tee /tmp/invite-maestro.log
+            flow_status=${PIPESTATUS[0]}
+            set -e
+            if test "$flow_status" -ne 0 && grep -Rqi "Failed to find ColorBuffer" /tmp/invite-maestro.log "$HOME/.maestro/tests" 2>/dev/null; then
+              echo "Detected Android emulator framebuffer failure; retrying once after a cold app restart."
+              adb shell am force-stop com.invitesomeone.app || true
+              bash scripts/reset-e2e-fixtures.sh
+              adb reverse tcp:4000 tcp:4000
+              bash scripts/run-maestro-flows.sh
+            else
+              exit "$flow_status"
+            fi
       - name: Upload story evidence
         if: always()
         uses: actions/upload-artifact@v4
