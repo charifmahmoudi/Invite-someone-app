@@ -23,7 +23,7 @@ name: US-03 people search and recommendation reasons
       text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    point: "38%, 95%"
+    id: tab-people
 - extendedWaitUntil:
     visible:
       text: "People worth inviting"
