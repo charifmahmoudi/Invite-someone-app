@@ -4,7 +4,15 @@
 set +e
 
 failed=0
-while IFS= read -r flow; do
+mapfile -t flows < <(find .maestro -type f -name '*.yaml' | sort)
+echo "Discovered ${#flows[@]} Maestro flows."
+if [ "${#flows[@]}" -ne 14 ]; then
+  echo "Expected 14 Maestro flows; refusing incomplete E2E execution."
+  printf '%s\n' "${flows[@]}"
+  exit 1
+fi
+
+for flow in "${flows[@]}"; do
   echo "Running Maestro flow: $flow"
   # Software-rendered hosted emulators can leave the Pixel launcher in an ANR
   # dialog over the app. Dismiss it before Maestro starts so it can interact
@@ -18,6 +26,6 @@ while IFS= read -r flow; do
   if [ "$?" -ne 0 ]; then
     failed=1
   fi
-done < <(find .maestro -type f -name '*.yaml' | sort)
+done
 
 exit "$failed"
