@@ -3,6 +3,10 @@ name: US-05 recommended invitees and personal note
 ---
 - launchApp:
     clearState: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-screen
+    timeout: 60000
 - scrollUntilVisible:
     element:
       id: welcome-sign-in
@@ -26,6 +30,9 @@ name: US-05 recommended invitees and personal note
     element: Low-stakes game night
     direction: DOWN
 - tapOn: Low-stakes game night
+- scrollUntilVisible:
+    element: Invite more people
+    direction: DOWN
 - tapOn: Invite more people
 - assertVisible: Who might enjoy this?
 - assertVisible:
