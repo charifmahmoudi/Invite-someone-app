@@ -23,7 +23,7 @@ name: US-11 combined filters and recovery
       text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    point: "38%, 95%"
+    id: tab-people
 - extendedWaitUntil:
     visible:
       text: "People worth inviting"
