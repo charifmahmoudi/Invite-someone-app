@@ -20,13 +20,13 @@ name: US-02 profile editing and session lifecycle
     id: auth-submit
 - extendedWaitUntil:
     visible:
-      id: plans-screen
+      text: "What sounds good?"
     timeout: 60000
 - stopApp
 - launchApp
 - extendedWaitUntil:
     visible:
-      id: plans-screen
+      text: "What sounds good?"
     timeout: 60000
 - tapOn:
     id: tab-profile
