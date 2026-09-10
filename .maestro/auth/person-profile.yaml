@@ -23,7 +23,7 @@ name: US-13 profile trust context and invitation eligibility
       text: "What sounds good?"
     timeout: 60000
 - tapOn:
-    point: "38%, 95%"
+    id: tab-people
 - extendedWaitUntil:
     visible:
       text: "People worth inviting"
