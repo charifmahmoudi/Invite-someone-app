@@ -4,12 +4,21 @@
 set +e
 
 failed=0
-mapfile -t flows < <(find .maestro -type f -name '*.yaml' | sort)
-echo "Discovered ${#flows[@]} Maestro flows."
-if [ "${#flows[@]}" -ne 14 ]; then
-  echo "Expected 14 Maestro flows; refusing incomplete E2E execution."
-  printf '%s\n' "${flows[@]}"
-  exit 1
+if [ -n "${MAESTRO_FLOW:-}" ]; then
+  if [ ! -f "$MAESTRO_FLOW" ]; then
+    echo "Configured Maestro flow does not exist: $MAESTRO_FLOW" >&2
+    exit 1
+  fi
+  flows=("$MAESTRO_FLOW")
+  echo "Running one isolated Maestro flow: $MAESTRO_FLOW"
+else
+  mapfile -t flows < <(find .maestro -type f -name '*.yaml' | sort)
+  echo "Discovered ${#flows[@]} Maestro flows."
+  if [ "${#flows[@]}" -ne 14 ]; then
+    echo "Expected 14 Maestro flows; refusing incomplete E2E execution."
+    printf '%s\n' "${flows[@]}"
+    exit 1
+  fi
 fi
 
 for flow in "${flows[@]}"; do
