@@ -22,8 +22,6 @@ name: US-09 activity host and attendee trust context
     visible:
       text: "What sounds good?"
     timeout: 60000
-- tapOn:
-    point: "12%, 95%"
 - tapOn: Canal walk & coffee
 - assertVisible: Hosted by
 - assertVisible: Who’s going
