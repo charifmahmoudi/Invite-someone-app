@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 120
     env:
       EXPO_PUBLIC_API_URL: http://127.0.0.1:4000
+      EXPO_PUBLIC_E2E_DIAGNOSTICS: 'true'
       E2E_EMAIL: demo@invite.app
       E2E_PASSWORD: invite-demo
       E2E_FIXTURES_TOKEN: invite-android-e2e-fixture-token-2026
