@@ -133,14 +133,11 @@ jobs:
           script: |
             adb reverse tcp:4000 tcp:4000
             set +e
-            ./android/gradlew -p android :app:connectedReleaseAndroidTest \
-              --no-daemon --max-workers=2 \
-              -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
+            ./android/gradlew -p android :app:connectedReleaseAndroidTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
             test_status=$?
             set -e
             mkdir -p evidence-native/US-01
-            adb pull /sdcard/Android/data/com.charifmahmoudi.invite/files/evidence/US-01/. \
-              evidence-native/US-01/ || true
+            adb pull /sdcard/Android/data/com.charifmahmoudi.invite/files/evidence/US-01/. evidence-native/US-01/ || true
             exit "$test_status"
 
       - name: Verify assertion-backed screenshot
