@@ -22,6 +22,7 @@ concurrency:
 env:
   EXPO_PUBLIC_API_URL: http://127.0.0.1:4000
   EXPO_PUBLIC_E2E_DIAGNOSTICS: 'true'
+  EXPO_ROUTER_APP_ROOT: src/app
   E2E_FIXTURES_TOKEN: invite-android-e2e-fixture-token-2026
   NODE_ENV: test
   AUTH_MODE: internal
@@ -133,7 +134,7 @@ jobs:
           script: |
             adb reverse tcp:4000 tcp:4000
             set +e
-            ./android/gradlew -p android :app:connectedReleaseAndroidTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
+            (cd android && ./gradlew :app:connectedReleaseAndroidTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8")
             test_status=$?
             set -e
             mkdir -p evidence-native/US-01
