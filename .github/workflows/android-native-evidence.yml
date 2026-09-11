@@ -124,6 +124,8 @@ jobs:
         run: bash scripts/reset-e2e-fixtures.sh
 
       - name: Run native Android acceptance test
+        env:
+          NODE_ENV: production
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: 34
