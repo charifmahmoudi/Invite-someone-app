@@ -13,7 +13,9 @@ import type {
 } from '@/types/domain';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '');
-const SESSION_KEY = '@invite/mongodb-session/v1';
+const diagnosticsEnabled = process.env.EXPO_PUBLIC_E2E_DIAGNOSTICS === 'true';
+// Android SecureStore keys must contain only letters, numbers, '.', '-', and '_'.
+const SESSION_KEY = 'invite_mongodb_session_v1';
 const secureStoreOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
@@ -110,6 +112,9 @@ const request = async <T>(
 ): Promise<T> => {
   if (!configuredApiUrl) throw new Error('The Invite API is not configured.');
   const token = authenticated ? await readBearerToken() : null;
+  if (diagnosticsEnabled) {
+    console.info(`[Invite API] ${options.method ?? 'GET'} ${path} (authenticated=${Boolean(token)})`);
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
@@ -132,8 +137,13 @@ const request = async <T>(
         (body as ApiErrorBody | undefined)?.message ?? 'The server rejected the request.';
       throw new ApiError(message, response.status);
     }
+    if (diagnosticsEnabled) console.info(`[Invite API] ${path} -> ${response.status}`);
     return body as T;
   } catch (error) {
+    if (diagnosticsEnabled) {
+      const detail = error instanceof Error ? error.message : 'unknown error';
+      console.error(`[Invite API] ${path} failed: ${detail}`);
+    }
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('The server took too long to respond. Check your connection and try again.');
@@ -225,10 +235,7 @@ export const loadMongoInvitationsPage = (
   direction?: 'sent' | 'received',
   cursor?: string,
   limit = 20,
-) =>
-  request<ApiPage<Invitation>>(
-    `/v1/invitations${queryString({ direction, cursor, limit })}`,
-  );
+) => request<ApiPage<Invitation>>(`/v1/invitations${queryString({ direction, cursor, limit })}`);
 
 export const loadMongoSavedPage = (cursor?: string, limit = 20) =>
   request<ApiPage<string>>(`/v1/saved${queryString({ cursor, limit })}`);

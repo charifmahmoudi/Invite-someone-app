@@ -69,7 +69,7 @@ export default function EditProfileScreen() {
   return (
     <ScrollScreen keyboardAware contentContainerStyle={styles.scroll}>
       <ScreenHeader onBack={() => router.back()} title="Edit profile" />
-      <View style={styles.content}>
+      <View style={styles.content} testID="profile-edit-screen">
         <View style={styles.avatarSection}>
           <Avatar
             profile={{
@@ -86,13 +86,14 @@ export default function EditProfileScreen() {
                 : '?',
             }}
             size={92}
+            testID="profile-edit-avatar"
           />
           <Text style={styles.avatarHint}>A clear, genuine introduction builds trust.</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About me</Text>
-          <InputField label="Name" onChangeText={setName} value={name} />
+          <InputField label="Name" onChangeText={setName} testID="profile-edit-name" value={name} />
           <InputField
             autoCapitalize="none"
             autoCorrect={false}
@@ -101,11 +102,25 @@ export default function EditProfileScreen() {
             label="Profile photo URL (optional)"
             onChangeText={setAvatarUrl}
             placeholder="https://example.com/my-photo.jpg"
+            testID="profile-edit-avatar-url"
             value={avatarUrl}
           />
-          <InputField label="Headline" maxLength={80} onChangeText={setHeadline} value={headline} />
-          <InputField label="Bio" maxLength={320} multiline onChangeText={setBio} value={bio} />
-          <InputField label="City" onChangeText={setCity} value={city} />
+          <InputField
+            label="Headline"
+            maxLength={80}
+            onChangeText={setHeadline}
+            testID="profile-edit-headline"
+            value={headline}
+          />
+          <InputField
+            label="Bio"
+            maxLength={320}
+            multiline
+            onChangeText={setBio}
+            testID="profile-edit-bio"
+            value={bio}
+          />
+          <InputField label="City" onChangeText={setCity} testID="profile-edit-city" value={city} />
         </View>
 
         <View style={styles.section}>
@@ -151,11 +166,16 @@ export default function EditProfileScreen() {
         </View>
 
         {formError ? (
-          <Text accessibilityRole="alert" style={styles.error}>
+          <Text accessibilityRole="alert" style={styles.error} testID="profile-edit-error">
             {formError}
           </Text>
         ) : null}
-        <Button label="Save profile" loading={state.busy} onPress={() => void submit()} />
+        <Button
+          label="Save profile"
+          loading={state.busy}
+          onPress={() => void submit()}
+          testID="profile-edit-save"
+        />
       </View>
     </ScrollScreen>
   );

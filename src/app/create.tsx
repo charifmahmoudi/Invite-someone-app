@@ -259,6 +259,7 @@ export default function CreateActivityScreen() {
           label="Create & invite people"
           loading={state.busy}
           onPress={() => void submit()}
+          testID="activity-create-submit"
         />
       </View>
     </ScrollScreen>

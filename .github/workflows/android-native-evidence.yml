@@ -1,0 +1,165 @@
+name: Android Native Evidence
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/android-native-evidence.yml'
+      - 'e2e/android-native/**'
+      - 'app.json'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'server/**'
+      - 'src/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_API_URL: http://127.0.0.1:4000
+  EXPO_PUBLIC_E2E_DIAGNOSTICS: 'true'
+  EXPO_ROUTER_APP_ROOT: src/app
+  E2E_FIXTURES_TOKEN: invite-android-e2e-fixture-token-2026
+  NODE_ENV: test
+  AUTH_MODE: internal
+  JWT_SECRET: invite-android-native-evidence-jwt-secret-2026
+  MONGODB_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true
+  MONGODB_DB_NAME: invite_android_native_e2e
+  MONGODB_ENSURE_INDEXES_ON_START: 'false'
+  E2E_FIXTURES_ENABLED: 'true'
+  PORT: '4000'
+
+jobs:
+  us01-sign-in:
+    name: US-01 · native Android sign-in evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Set up Android JDK available
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        run: |
+          npx expo prebuild --platform android --no-install
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /' \
+            android/app/src/main/AndroidManifest.xml
+          mkdir -p android/app/src/androidTest/java/com/charifmahmoudi/invite/evidence
+          cp e2e/android-native/Us01SignInTest.java \
+            android/app/src/androidTest/java/com/charifmahmoudi/invite/evidence/Us01SignInTest.java
+          printf '%s\n' \
+            '' \
+            'android {' \
+            '  testBuildType "release"' \
+            '  defaultConfig { testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner" }' \
+            '}' \
+            'dependencies {' \
+            '  androidTestImplementation "androidx.test.ext:junit:1.2.1"' \
+            '  androidTestImplementation "androidx.test:runner:1.6.2"' \
+            '  androidTestImplementation "androidx.test.uiautomator:uiautomator:2.3.0"' \
+            '}' >> android/app/build.gradle
+        env:
+          CI: '1'
+          NODE_ENV: production
+
+      - name: Start disposable MongoDB replica set
+        run: |
+          docker run --detach --name invite-native-evidence-mongo \
+            --publish 27017:27017 \
+            mongo:8.0 --replSet rs0 --bind_ip_all
+          for attempt in {1..30}; do
+            if docker exec invite-native-evidence-mongo mongosh --quiet --eval \
+              'db.adminCommand({ ping: 1 })' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec invite-native-evidence-mongo mongosh --quiet --eval \
+            'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for attempt in {1..30}; do
+            if docker exec invite-native-evidence-mongo mongosh --quiet --eval \
+              'if (!db.hello().isWritablePrimary) quit(1)' >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Start isolated Invite API
+        run: |
+          npm run server:start > /tmp/invite-native-evidence-api.log 2>&1 &
+          for attempt in {1..90}; do
+            if curl --fail --silent --connect-timeout 2 --max-time 5 \
+              http://127.0.0.1:4000/v1/e2e/ready \
+              -H "Authorization: Bearer $E2E_FIXTURES_TOKEN" >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          cat /tmp/invite-native-evidence-api.log
+          exit 1
+
+      - name: Reset deterministic fixtures
+        run: bash scripts/reset-e2e-fixtures.sh
+
+      - name: Run native Android acceptance test
+        env:
+          NODE_ENV: production
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-load -no-snapshot-save -feature -Vulkan
+          script: |
+            adb reverse tcp:4000 tcp:4000
+            set +e
+            (cd android && ./gradlew :app:connectedReleaseAndroidTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8")
+            test_status=$?
+            set -e
+            mkdir -p evidence-native/US-01
+            adb pull /sdcard/Android/data/com.charifmahmoudi.invite/files/evidence/US-01/. evidence-native/US-01/ || true
+            exit "$test_status"
+
+      - name: Verify assertion-backed screenshot
+        run: |
+          test -s evidence-native/US-01/01-returning-member-signed-in.png
+
+      - name: Upload native evidence and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-evidence-us01-${{ github.run_id }}
+          path: |
+            evidence-native/US-01
+            android/app/build/reports/androidTests
+            android/app/build/outputs/androidTest-results
+            /tmp/invite-native-evidence-api.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop disposable MongoDB
+        if: always()
+        run: docker rm --force invite-native-evidence-mongo || true

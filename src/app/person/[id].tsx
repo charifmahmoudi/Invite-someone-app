@@ -83,9 +83,9 @@ export default function PersonDetailsScreen() {
   return (
     <ScrollScreen contentContainerStyle={styles.scroll}>
       <ScreenHeader onBack={() => router.back()} title="Profile" />
-      <View style={styles.content}>
-        <View style={styles.hero}>
-          <Avatar profile={profile} size={96} />
+      <View style={styles.content} testID="person-profile-screen">
+        <View style={styles.hero} testID="person-profile-summary">
+          <Avatar profile={profile} size={96} testID="person-profile-avatar" />
           <View style={styles.nameRow}>
             <Text style={styles.name}>{profile.name}</Text>
             {profile.isVerified ? <AppIcon name="shield" color={palette.forest} size={22} /> : null}
@@ -120,7 +120,7 @@ export default function PersonDetailsScreen() {
           </View>
         ) : null}
 
-        <View style={styles.section}>
+        <View style={styles.section} testID="person-invitation-options">
           <Text style={styles.sectionTitle}>Enjoys</Text>
           <View style={styles.pills}>
             {profile.interests.map((interest) => (

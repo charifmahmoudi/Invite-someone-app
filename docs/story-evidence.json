@@ -12,7 +12,7 @@
         "server/src/app.ts"
       ],
       "tests": ["src/__tests__/validation.test.ts"],
-      "e2e": null,
+      "e2e": ".maestro/auth/registration-validation.yaml",
       "evidence": "evidence/US-01",
       "manualAnchor": "us-01--create-an-account-and-preferences",
       "criteria": [
@@ -21,7 +21,7 @@
           "testLayers": ["unit", "e2e"],
           "implementationRefs": ["src/app/(auth)/sign-up.tsx", "src/domain/validation.ts"],
           "testRefs": ["src/__tests__/validation.test.ts"],
-          "e2eFlow": null,
+          "e2eFlow": ".maestro/auth/registration-validation.yaml",
           "screenshots": ["evidence/US-01/01-registration-validation.png"],
           "manualAnchor": "us-01--create-an-account-and-preferences"
         },
@@ -58,7 +58,7 @@
         "server/src/app.ts"
       ],
       "tests": ["src/__tests__/validation.test.ts"],
-      "e2e": null,
+      "e2e": ".maestro/auth/profile-edit.yaml",
       "evidence": "evidence/US-02",
       "manualAnchor": "us-02--edit-a-profile",
       "criteria": [
@@ -71,7 +71,7 @@
             "server/src/app.ts"
           ],
           "testRefs": ["src/__tests__/validation.test.ts"],
-          "e2eFlow": null,
+          "e2eFlow": ".maestro/auth/profile-edit.yaml",
           "screenshots": [
             "evidence/US-02/01-profile-before.png",
             "evidence/US-02/02-profile-updated.png"
@@ -83,7 +83,7 @@
           "testLayers": ["unit", "api", "e2e"],
           "implementationRefs": ["src/app/profile/edit.tsx", "server/src/app.ts"],
           "testRefs": ["src/__tests__/validation.test.ts"],
-          "e2eFlow": null,
+          "e2eFlow": ".maestro/auth/profile-edit.yaml",
           "screenshots": ["evidence/US-02/03-profile-validation.png"],
           "manualAnchor": "us-02--edit-a-profile"
         }
@@ -446,7 +446,7 @@
         "src/app/person/[id].tsx"
       ],
       "tests": [],
-      "e2e": null,
+      "e2e": ".maestro/auth/person-profile.yaml",
       "evidence": "evidence/US-13",
       "manualAnchor": "us-13--review-a-persons-profile",
       "criteria": [
@@ -459,7 +459,7 @@
             "src/app/person/[id].tsx"
           ],
           "testRefs": [],
-          "e2eFlow": null,
+          "e2eFlow": ".maestro/auth/person-profile.yaml",
           "screenshots": [
             "evidence/US-13/01-avatar-fallback.png",
             "evidence/US-13/02-person-profile.png"
@@ -471,7 +471,7 @@
           "testLayers": ["api", "e2e"],
           "implementationRefs": ["src/app/person/[id].tsx", "server/src/app.ts"],
           "testRefs": [],
-          "e2eFlow": null,
+          "e2eFlow": ".maestro/auth/person-profile.yaml",
           "screenshots": ["evidence/US-13/03-invite-unavailable.png"],
           "manualAnchor": "us-13--review-a-persons-profile"
         }

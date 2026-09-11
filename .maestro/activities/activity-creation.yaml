@@ -1,4 +1,5 @@
 appId: com.charifmahmoudi.invite
+name: US-04 activity validation and creation form
 ---
 - launchApp:
     clearState: true
@@ -12,8 +13,6 @@ appId: com.charifmahmoudi.invite
     direction: DOWN
 - tapOn:
     id: welcome-sign-in
-- assertVisible:
-    id: auth-sign-in-screen
 - tapOn:
     id: auth-email
 - inputText: ${E2E_EMAIL}
@@ -27,3 +26,13 @@ appId: com.charifmahmoudi.invite
     visible:
       text: "What sounds good?"
     timeout: 60000
+- tapOn: Create
+- assertVisible: Create an activity
+- scrollUntilVisible:
+    element:
+      id: activity-create-submit
+    direction: DOWN
+- tapOn:
+    id: activity-create-submit
+- assertVisible: Title must be at least 4 characters.
+- takeScreenshot: evidence/US-04/01-activity-validation

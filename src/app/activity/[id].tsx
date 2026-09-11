@@ -76,6 +76,7 @@ export default function ActivityDetailsScreen() {
         onBack={() => router.back()}
         right={
           <PressableScale
+            testID="activity-save-toggle"
             accessibilityLabel={saved ? 'Remove from saved activities' : 'Save activity'}
             haptic
             onPress={() => void toggleSavedActivity(activity.id)}
@@ -232,7 +233,7 @@ export default function ActivityDetailsScreen() {
           </View>
         ) : null}
 
-        <View style={styles.safety}>
+        <View style={styles.safety} testID="activity-safety-guidance">
           <AppIcon name="shield" color={palette.forest} size={23} />
           <View style={styles.safetyCopy}>
             <Text style={styles.safetyTitle}>A comfortable first meeting</Text>

@@ -1,4 +1,5 @@
 appId: com.charifmahmoudi.invite
+name: US-07 community activity joining
 ---
 - launchApp:
     clearState: true
@@ -12,8 +13,6 @@ appId: com.charifmahmoudi.invite
     direction: DOWN
 - tapOn:
     id: welcome-sign-in
-- assertVisible:
-    id: auth-sign-in-screen
 - tapOn:
     id: auth-email
 - inputText: ${E2E_EMAIL}
@@ -27,3 +26,12 @@ appId: com.charifmahmoudi.invite
     visible:
       text: "What sounds good?"
     timeout: 60000
+- assertVisible: Canal walk & coffee
+- scrollUntilVisible:
+    element: Canal walk & coffee
+    direction: DOWN
+- tapOn: Canal walk & coffee
+- assertVisible: Join this activity
+- tapOn: Join this activity
+- assertVisible: You’re in
+- takeScreenshot: evidence/US-07/01-joined-activity

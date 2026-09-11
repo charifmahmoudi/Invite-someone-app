@@ -48,8 +48,8 @@ export default function InvitationsScreen() {
   };
 
   return (
-    <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+    <Screen testID="invitations-screen">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} testID="invitations-screen">
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>MAKE IT EASY TO SAY YES</Text>
           <Text style={styles.title}>Invitations</Text>
@@ -156,7 +156,7 @@ export default function InvitationsScreen() {
           />
         ) : null}
 
-        <View style={styles.safetyNote}>
+        <View style={styles.safetyNote} testID="invitations-safety-guidance">
           <AppIcon name="shield" color={palette.forest} size={22} />
           <Text style={styles.safetyText}>
             Meet in public for first-time plans, tell someone where you are going, and trust your

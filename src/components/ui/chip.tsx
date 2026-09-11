@@ -29,9 +29,10 @@ interface ChoiceChipProps {
   selected: boolean;
   onPress: () => void;
   disabled?: boolean;
+  testID?: string;
 }
 
-export function ChoiceChip({ label, selected, onPress, disabled }: ChoiceChipProps) {
+export function ChoiceChip({ label, selected, onPress, disabled, testID }: ChoiceChipProps) {
   return (
     <PressableScale
       accessibilityLabel={label}
@@ -39,6 +40,7 @@ export function ChoiceChip({ label, selected, onPress, disabled }: ChoiceChipPro
       disabled={disabled}
       haptic
       onPress={onPress}
+      testID={testID}
       style={[styles.choice, selected && styles.choiceSelected]}
     >
       {selected ? <AppIcon name="check" size={15} color={palette.white} /> : null}

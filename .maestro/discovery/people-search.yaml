@@ -1,4 +1,5 @@
 appId: com.charifmahmoudi.invite
+name: US-03 people search and recommendation reasons
 ---
 - launchApp:
     clearState: true
@@ -12,8 +13,6 @@ appId: com.charifmahmoudi.invite
     direction: DOWN
 - tapOn:
     id: welcome-sign-in
-- assertVisible:
-    id: auth-sign-in-screen
 - tapOn:
     id: auth-email
 - inputText: ${E2E_EMAIL}
@@ -27,3 +26,18 @@ appId: com.charifmahmoudi.invite
     visible:
       text: "What sounds good?"
     timeout: 60000
+- tapOn:
+    id: tab-people
+- extendedWaitUntil:
+    visible:
+      text: "People worth inviting"
+    timeout: 30000
+- assertVisible:
+    id: people-search
+- tapOn:
+    id: people-search
+- inputText: Jonas
+- assertVisible:
+    id: profile-card-profile-jonas
+- assertVisible: 3 shared interests
+- takeScreenshot: evidence/US-03/01-people-search

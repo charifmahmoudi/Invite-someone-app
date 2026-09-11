@@ -73,8 +73,8 @@ export default function PeopleScreen() {
     router.push({ pathname: '/person/[id]', params: { id: profile.id } });
 
   return (
-    <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+    <Screen testID="people-screen">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} testID="people-screen">
         <View style={styles.heading}>
           <Text style={styles.eyebrow}>YOUR LOCAL CIRCLE</Text>
           <Text style={styles.title}>People worth inviting</Text>
@@ -87,6 +87,7 @@ export default function PeopleScreen() {
         <SearchField
           onChangeText={setQuery}
           placeholder="Search names, bios, interests, or areas"
+          testID="people-search"
           value={query}
         />
 
@@ -247,6 +248,7 @@ export default function PeopleScreen() {
                   onPress={() => openProfile(profile)}
                   profile={profile}
                   reasons={reasons}
+                  testID={`profile-card-${profile.id}`}
                 />
               );
             })}

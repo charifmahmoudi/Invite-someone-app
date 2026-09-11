@@ -1,0 +1,51 @@
+appId: com.charifmahmoudi.invite
+name: US-05 recommended invitees and personal note
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-screen
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
+- tapOn:
+    id: welcome-sign-in
+- tapOn:
+    id: auth-email
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible:
+      text: "What sounds good?"
+    timeout: 60000
+- scrollUntilVisible:
+    element: Low-stakes game night
+    direction: DOWN
+- tapOn: Low-stakes game night
+- scrollUntilVisible:
+    element: Invite more people
+    direction: DOWN
+- tapOn: Invite more people
+- assertVisible: Who might enjoy this?
+- assertVisible:
+    id: profile-card-profile-sofia
+- takeScreenshot: evidence/US-05/01-eligible-invitees
+- tapOn:
+    id: profile-card-profile-sofia
+- scrollUntilVisible:
+    element:
+      id: invite-send-submit
+    direction: DOWN
+- assertVisible: Add a personal note
+- tapOn:
+    id: invite-send-submit
+- assertVisible: Invitations sent
+- takeScreenshot: evidence/US-05/03-sent-invitation

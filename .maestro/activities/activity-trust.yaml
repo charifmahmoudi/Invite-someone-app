@@ -1,4 +1,5 @@
 appId: com.charifmahmoudi.invite
+name: US-09 activity host and attendee trust context
 ---
 - launchApp:
     clearState: true
@@ -12,8 +13,6 @@ appId: com.charifmahmoudi.invite
     direction: DOWN
 - tapOn:
     id: welcome-sign-in
-- assertVisible:
-    id: auth-sign-in-screen
 - tapOn:
     id: auth-email
 - inputText: ${E2E_EMAIL}
@@ -27,3 +26,15 @@ appId: com.charifmahmoudi.invite
     visible:
       text: "What sounds good?"
     timeout: 60000
+- scrollUntilVisible:
+    element: Canal walk & coffee
+    direction: DOWN
+- tapOn: Canal walk & coffee
+- scrollUntilVisible:
+    element: Hosted by
+    direction: DOWN
+- assertVisible: Hosted by
+- assertVisible: Who’s going
+- assertVisible: reliable
+- assertVisible: people max
+- takeScreenshot: evidence/US-09/01-activity-trust

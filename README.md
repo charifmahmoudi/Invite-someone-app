@@ -1,8 +1,33 @@
 # Invite
 
+<p align="center">
+  <img src="./assets/brand/icon.png" alt="Invite logo" width="96" />
+</p>
+
+<p align="center"><strong>Small plans. Real connections.</strong><br />Turn shared interests into thoughtful local invitations.</p>
+
+<p align="center">
+  <a href="https://github.com/charifmahmoudi/Invite-someone-app/actions/workflows/ci.yml"><img src="https://github.com/charifmahmoudi/Invite-someone-app/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://github.com/charifmahmoudi/Invite-someone-app/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-315c4c.svg" alt="MIT license" /></a>
+  <a href="https://github.com/charifmahmoudi/Invite-someone-app"><img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20Web-4f46e5.svg" alt="Android, iOS and Web" /></a>
+</p>
+
 Invite is a cross-platform social activity app designed to make the first move easier. Members create a profile, discover people through shared interests, make a small plan, and send a thoughtful invitation. Repeated low-pressure interactions can grow into genuine local communities.
 
 The same TypeScript codebase runs on iPhone, Android, and the web using Expo SDK 57 and React Native.
+
+> **MVP acceptance status:** The application foundation and standard CI are working. Formal MVP acceptance is still in progress: Android emulator E2E, reviewed screenshot evidence, and all 13 verified user stories are required before release claims are made.
+
+## Product at a glance
+
+Invite is built around a simple loop:
+
+1. Create a useful profile with interests, availability, and connection goals.
+2. Discover compatible people using transparent, privacy-preserving signals.
+3. Create a small activity or find a community plan.
+4. Send a thoughtful invitation and decide without pressure.
+
+The repository includes a demo mode for product review. Verified product screenshots will be added here only from successful Android emulator runs; generated or simulated UI images are not treated as acceptance evidence.
 
 ## Product highlights
 
@@ -82,22 +107,26 @@ You can also use the local compatibility sign-in screen:
 - Email: `demo@invite.app`
 - Password: any non-empty value in local preview mode
 
-## Production architecture
+## Architecture
 
 Invite deliberately separates identity from product data:
 
-```text
-Expo / React Native
-   |-- Firebase Authentication: email/password + Google identity/session
-   |
-   `-- Invite Express API: authorization + business rules
-              |
-              `-- MongoDB Atlas: Invite profiles/domain data
+```mermaid
+flowchart TD
+  App["Expo / React Native"]
+  Identity["Firebase Authentication"]
+  API["Invite Express API"]
+  DB["MongoDB Atlas"]
+  App --> Identity
+  App --> API
+  API --> DB
 ```
 
 Firebase is an identity provider only. MongoDB remains authoritative for profiles, activities, invitations, saved plans and identity mappings.
 
 The Express API maps each Firebase UID to an internal Invite user ID, so authentication-provider IDs do not leak throughout the domain model.
+
+The client never connects directly to MongoDB. Firebase owns identity; the Invite API owns authorization and business rules; MongoDB owns profiles, activities, invitations, saved plans, and identity mappings.
 
 Current deployment separation:
 
@@ -118,6 +147,20 @@ Production (not cut over)
 Render auto-deploy is disabled for staging and production. Git branch HEAD and live Render deployment revision must be checked independently.
 
 See [Deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md) for the complete environment, CI/CD, signing, secret-boundary, promotion and rollback model.
+
+## Quality and delivery model
+
+```mermaid
+flowchart LR
+  Code["Code + stories"] --> Tests["Unit + API tests"]
+  Tests --> E2E["Pixel 6/API 35 E2E"]
+  E2E --> Review["Screenshot review"]
+  Review --> Manual["HTML/PDF manual"]
+```
+
+Every user story is traced through implementation references, automated tests, a Maestro flow, screenshot checkpoints, and a user-manual section. A story is not `verified` merely because code exists or CI passes: the required emulator screenshots must come from the same successful run and be visually reviewed for correctness, readability, privacy, and provenance.
+
+See the [MVP delivery standard](./docs/MVP_DELIVERY.md), [user stories](./docs/USER_STORIES.md), [testing strategy](./docs/TESTING.md), and [current status](./docs/CURRENT_STATUS.md).
 
 ## Connect MongoDB and the API
 
@@ -168,27 +211,19 @@ Never put MongoDB credentials, OAuth client secrets, Firebase service-account JS
 
 ## Documentation
 
-- [MVP feature catalogue](./docs/FEATURES.md)
-- [MVP delivery and evidence standard](./docs/MVP_DELIVERY.md)
-- [Deterministic E2E fixtures](./docs/E2E_FIXTURES.md)
-- [Current migration/release status](./docs/CURRENT_STATUS.md)
-- [User manual](./docs/USER_MANUAL.md)
-- [Deployment architecture and environment inventory](./docs/DEPLOYMENT_ARCHITECTURE.md)
-- [Product brief](./docs/PRODUCT.md)
-- [User stories and acceptance criteria](./docs/USER_STORIES.md)
-- [Application architecture](./docs/ARCHITECTURE.md)
-- [Firebase Auth setup](./docs/FIREBASE_AUTH_SETUP.md)
-- [Firebase operations and mobile testing runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md)
-- [Google Play testing/signing/listing guide](./docs/GOOGLE_PLAY_TESTING.md)
-- [MongoDB backend setup](./docs/MONGODB_BACKEND.md)
-- [Data model and security rules](./docs/DATA_MODEL.md)
-- [Testing strategy](./docs/TESTING.md)
-- [Safety and privacy](./docs/SAFETY_AND_PRIVACY.md)
-- [Contributing](./CONTRIBUTING.md)
+Product: [brief](./docs/PRODUCT.md) · [feature catalogue](./docs/FEATURES.md) · [user stories](./docs/USER_STORIES.md)
+
+Development: [architecture](./docs/ARCHITECTURE.md) · [data model](./docs/DATA_MODEL.md) · [MongoDB/API setup](./docs/MONGODB_BACKEND.md) · [contributing](./CONTRIBUTING.md)
+
+Quality: [testing strategy](./docs/TESTING.md) · [MVP delivery standard](./docs/MVP_DELIVERY.md) · [E2E fixtures](./docs/E2E_FIXTURES.md) · [user manual](./docs/USER_MANUAL.md)
+
+Operations: [current status](./docs/CURRENT_STATUS.md) · [deployment architecture](./docs/DEPLOYMENT_ARCHITECTURE.md) · [Firebase setup](./docs/FIREBASE_AUTH_SETUP.md) · [Firebase runbook](./docs/FIREBASE_OPERATIONS_RUNBOOK.md) · [Google Play guide](./docs/GOOGLE_PLAY_TESTING.md)
+
+Trust and safety: [safety and privacy](./docs/SAFETY_AND_PRIVACY.md)
 
 ## Project status
 
-This repository contains a functional, testable MVP. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured, `versionCode 5` is visible to enrolled testers, and the Play-delivered build installs/runs on the test phone. The full Play-installed functional acceptance suite has been explicitly waived for this release candidate and remains unverified rather than passed. Production `main`, the production Render service, and production MongoDB remain unchanged pending explicit production promotion/cutover actions.
+This repository contains a functional, testable MVP foundation. Firebase Authentication is staged on `impl/firebase-auth`; Google Play Internal testing is configured; and the Play-delivered build installs/runs on the test phone. Formal acceptance remains gated by the Android E2E suite, screenshot review, and verification of all 13 stories. The full Play-installed functional acceptance suite has been explicitly waived for this release candidate and remains unverified rather than passed. Production `main`, the production Render service, and production MongoDB remain unchanged pending explicit production promotion/cutover actions.
 
 See [CURRENT_STATUS.md](./docs/CURRENT_STATUS.md) for the exact completed work, waiver, and remaining release gates.
 

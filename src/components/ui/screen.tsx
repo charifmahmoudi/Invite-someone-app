@@ -17,11 +17,12 @@ interface ScreenProps {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   edges?: Edge[];
+  testID?: string;
 }
 
-export function Screen({ children, style, edges = ['top', 'left', 'right'] }: ScreenProps) {
+export function Screen({ children, style, edges = ['top', 'left', 'right'], testID }: ScreenProps) {
   return (
-    <SafeAreaView edges={edges} style={[styles.safeArea, style]}>
+    <SafeAreaView edges={edges} style={[styles.safeArea, style]} testID={testID}>
       <View style={styles.content}>{children}</View>
     </SafeAreaView>
   );

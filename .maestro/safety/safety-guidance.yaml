@@ -1,0 +1,45 @@
+appId: com.charifmahmoudi.invite
+name: US-10 first-meeting safety guidance
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-screen
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      id: welcome-sign-in
+    direction: DOWN
+- tapOn:
+    id: welcome-sign-in
+- tapOn:
+    id: auth-email
+- inputText: ${E2E_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${E2E_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible:
+      text: "What sounds good?"
+    timeout: 60000
+- tapOn:
+    id: tab-invites
+- extendedWaitUntil:
+    visible:
+      text: "Invitations"
+    timeout: 30000
+- assertVisible:
+    id: invitations-safety-guidance
+- assertVisible: Meet in public for first-time plans
+- takeScreenshot: evidence/US-10/01-invitations-safety
+- assertVisible: Canal walk & coffee
+- tapOn: Canal walk & coffee
+- assertVisible:
+    id: activity-safety-guidance
+- assertVisible: A comfortable first meeting
+- assertVisible: Meet in public, keep your own transport options
+- takeScreenshot: evidence/US-10/02-activity-safety
